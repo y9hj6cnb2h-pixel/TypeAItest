@@ -1,0 +1,27 @@
+{
+  "name": "onchain-copilot",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "An AI wallet analyst for Ethereum and Solana, built on the TypeAI SDK.",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc -b --noEmit false --emitDeclarationOnly false"
+  },
+  "dependencies": {
+    "buffer": "^6.0.3",
+    "ethers": "^6.13.5",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "type-ai-sdk": "^2.0.1"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "typescript": "^5.6.3",
+    "vite": "^6.0.5"
+  }
+}

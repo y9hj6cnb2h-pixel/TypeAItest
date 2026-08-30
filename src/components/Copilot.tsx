@@ -1,0 +1,307 @@
+import { useEffect, useRef, useState } from "react";
+import type { ITypeAiClientMessage, IResponseConstructorOutput } from "type-ai-sdk";
+import { getClient, describeError, readMessage } from "../lib/client";
+import type { Settings } from "../lib/config";
+import { shortAddress, type Chain, type WalletState } from "../lib/wallet";
+import AgentTrace from "./AgentTrace";
+import SignPanel, { extractTx } from "./SignPanel";
+import { ErrorBox, IconSend, Spinner } from "./ui";
+
+type ChatMsg = {
+  id: string;
+  role: "user" | "assistant";
+  text: string;
+  chain: Chain;
+  data?: unknown;
+};
+
+type Suggestion = { label: string; query: string };
+
+const SUGGESTIONS: Record<Chain, Suggestion[]> = {
+  ethereum: [
+    {
+      label: "What's gas costing right now?",
+      query: "What is the current gas fee on Ethereum?",
+    },
+    {
+      label: "Tell me everything about USDC",
+      query: "Tell me everything about the USDC token",
+    },
+    {
+      label: "How much ETH does vitalik.eth hold?",
+      query:
+        "What is the ETH balance of the wallet 0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045?",
+    },
+    {
+      label: "Explain this transaction to me",
+      query:
+        "Explain what happened in transaction 0x5c504ed432cb51138bcf09aa5e8a410dd4a1e204ef84bfed1be16dfba1b22060",
+    },
+  ],
+  solana: [
+    {
+      label: "Check a wallet's SOL balance",
+      query:
+        "What is the SOL balance of 9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM?",
+    },
+    { label: "Look up the JUP token", query: "Give me the token details for JUP" },
+    {
+      label: "What do Solana fees look like?",
+      query: "What is the current transaction fee on Solana?",
+    },
+    {
+      label: "Swap 0.1 SOL into USDC",
+      query: "I want to swap 0.1 SOL for USDC — what would that cost me?",
+    },
+  ],
+};
+
+const NEEDS_ADDRESS = /\bmy\b|\bmine\b|\bi own\b|\bi hold\b/i;
+const HAS_ADDRESS = /0x[a-fA-F0-9]{40}|[1-9A-HJ-NP-Za-km-z]{32,44}/;
+
+export default function Copilot({
+  settings,
+  wallet,
+  chain,
+  onChainChange,
+}: {
+  settings: Settings;
+  wallet: WalletState | null;
+  chain: Chain;
+  onChainChange: (c: Chain) => void;
+}) {
+  const [messages, setMessages] = useState<ChatMsg[]>([]);
+  const [history, setHistory] = useState<ITypeAiClientMessage[]>([]);
+  const [input, setInput] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [traceKey, setTraceKey] = useState(0);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const taRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [messages, busy]);
+
+  async function ask(raw: string) {
+    const text = raw.trim();
+    if (!text || busy) return;
+
+    // If the user says "my balance" while a wallet is connected, tell the agent which
+    // address they mean — it has no other way to know.
+    const augmented =
+      wallet && NEEDS_ADDRESS.test(text) && !HAS_ADDRESS.test(text)
+        ? `${text} (my wallet address is ${wallet.address})`
+        : text;
+
+    setInput("");
+    setError(null);
+    setTraceKey((k) => k + 1);
+    setMessages((m) => [
+      ...m,
+      { id: crypto.randomUUID(), role: "user", text, chain },
+    ]);
+    setBusy(true);
+
+    try {
+      const client = getClient(settings);
+      const result = await client.prompt({
+        message: augmented,
+        blockchain: chain as never,
+        previousMessages: history.slice(-6),
+      });
+
+      const responses: IResponseConstructorOutput[] = Array.isArray(result)
+        ? result
+        : result.responses;
+
+      if (!Array.isArray(result)) {
+        setHistory(result.messageHistory as ITypeAiClientMessage[]);
+      } else {
+        setHistory((h) => [
+          ...h,
+          { role: "user", content: augmented },
+          ...responses.map((r) => ({
+            role: "assistant" as const,
+            content: readMessage(r.message).text,
+          })),
+        ]);
+      }
+
+      if (!responses?.length) {
+        setError("The agent returned no response. Try rephrasing the question.");
+      }
+
+      setMessages((m) => [
+        ...m,
+        ...(responses ?? []).map((r) => ({
+          id: crypto.randomUUID(),
+          role: "assistant" as const,
+          text: readMessage(r.message).text,
+          chain,
+          data: r.data,
+        })),
+      ]);
+    } catch (err) {
+      setError(describeError(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      void ask(input);
+    }
+  };
+
+  return (
+    <div className="copilot">
+      <div className="chat-col">
+        <div className="chat-scroll" ref={scrollRef}>
+          <div className="chat-inner">
+            {messages.length === 0 && (
+              <Intro chain={chain} onPick={(s) => void ask(s)} />
+            )}
+
+            {messages.map((m) => (
+              <Message key={m.id} msg={m} />
+            ))}
+
+            {busy && (
+              <div className="msg bot">
+                <div className="msg-avatar">AI</div>
+                <div className="msg-body">
+                  <div className="msg-who">Copilot</div>
+                  <div className="typing" aria-label="Thinking">
+                    <i />
+                    <i />
+                    <i />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {error && <ErrorBox>{error}</ErrorBox>}
+          </div>
+        </div>
+
+        <div className="composer">
+          <div className="composer-inner">
+            <div className="composer-box">
+              <textarea
+                ref={taRef}
+                rows={1}
+                value={input}
+                placeholder={`Ask about wallets, tokens, gas or transactions on ${chain}…`}
+                onChange={(e) => {
+                  setInput(e.target.value);
+                  const el = e.target;
+                  el.style.height = "auto";
+                  el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
+                }}
+                onKeyDown={onKeyDown}
+                disabled={busy}
+              />
+              <button
+                className="btn primary"
+                onClick={() => void ask(input)}
+                disabled={busy || !input.trim()}
+                aria-label="Send"
+              >
+                {busy ? <Spinner /> : <IconSend />}
+              </button>
+            </div>
+            <div className="composer-meta">
+              <div className="seg" role="group" aria-label="Blockchain">
+                <button
+                  type="button"
+                  aria-pressed={chain === "ethereum"}
+                  onClick={() => onChainChange("ethereum")}
+                >
+                  Ethereum
+                </button>
+                <button
+                  type="button"
+                  aria-pressed={chain === "solana"}
+                  onClick={() => onChainChange("solana")}
+                >
+                  Solana
+                </button>
+              </div>
+              {wallet ? (
+                <span>
+                  Wallet context: <code>{shortAddress(wallet.address, 6)}</code>
+                </span>
+              ) : (
+                <span>Connect a wallet to ask about “my” balances.</span>
+              )}
+              <span className="spacer" />
+              <span>Enter to send · Shift+Enter for a new line</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <AgentTrace resetKey={traceKey} />
+    </div>
+  );
+}
+
+function Intro({
+  chain,
+  onPick,
+}: {
+  chain: Chain;
+  onPick: (s: string) => void;
+}) {
+  return (
+    <div>
+      <h2 style={{ fontSize: 21, margin: "6px 0 6px", letterSpacing: "-0.02em" }}>
+        Ask the chain anything.
+      </h2>
+      <p className="dim" style={{ margin: "0 0 4px", maxWidth: 620 }}>
+        This copilot runs on the{" "}
+        <a
+          href="https://www.npmjs.com/package/type-ai-sdk"
+          target="_blank"
+          rel="noreferrer"
+        >
+          TypeAI SDK
+        </a>
+        . A hosted model reads your question and picks an on-chain tool; the SDK then
+        executes that tool right here in your browser and writes the answer back in
+        plain English. Watch the <strong>Agent trace</strong> on the right to see each
+        step as it happens.
+      </p>
+      <div className="suggestions">
+        {SUGGESTIONS[chain].map((s) => (
+          <button
+            key={s.label}
+            className="suggestion"
+            onClick={() => onPick(s.query)}
+            title={s.query}
+          >
+            {s.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function Message({ msg }: { msg: ChatMsg }) {
+  const tx = msg.role === "assistant" ? extractTx(msg.data, msg.chain) : null;
+  return (
+    <div className={`msg ${msg.role === "user" ? "user" : "bot"}`}>
+      <div className="msg-avatar">{msg.role === "user" ? "You" : "AI"}</div>
+      <div className="msg-body">
+        <div className="msg-who">{msg.role === "user" ? "You" : "Copilot"}</div>
+        <div className="msg-text">{msg.text}</div>
+        {tx ? <SignPanel tx={tx} chain={msg.chain} compact /> : null}
+      </div>
+    </div>
+  );
+}

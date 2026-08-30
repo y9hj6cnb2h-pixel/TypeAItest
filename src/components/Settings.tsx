@@ -1,0 +1,300 @@
+import { useState } from "react";
+import {
+  DEFAULTS,
+  capabilities,
+  clearSettings,
+  covalentKeyLooksValid,
+  type Settings as S,
+} from "../lib/config";
+import { getProxyPrefix, setProxyPrefix, TYPEAI_ORIGIN } from "../lib/netlog";
+import { Banner, IconExternal } from "./ui";
+
+type KeyField = {
+  id: keyof S;
+  label: string;
+  placeholder: string;
+  hint: React.ReactNode;
+  secret?: boolean;
+};
+
+const FIELDS: KeyField[] = [
+  {
+    id: "ethereumRpcUrl",
+    label: "Ethereum RPC URL",
+    placeholder: "https://ethereum-rpc.publicnode.com",
+    hint: (
+      <>
+        Any CORS-enabled JSON-RPC endpoint. Defaults to a free public node that is
+        rate-limited — swap in your own for real use.
+      </>
+    ),
+  },
+  {
+    id: "solanaRpcUrl",
+    label: "Solana RPC URL",
+    placeholder: "https://api.mainnet-beta.solana.com",
+    hint: (
+      <>
+        The public endpoint works but throttles hard. Helius, QuickNode or Triton give
+        you headroom.
+      </>
+    ),
+  },
+  {
+    id: "alchemyApiKey",
+    label: "Alchemy API key",
+    placeholder: "optional",
+    secret: true,
+    hint: (
+      <>
+        Optional alternative to the RPC URL above.{" "}
+        <a href="https://www.alchemy.com/" target="_blank" rel="noreferrer">
+          alchemy.com <IconExternal />
+        </a>
+      </>
+    ),
+  },
+  {
+    id: "etherscanApiKey",
+    label: "Etherscan API key",
+    placeholder: "required for Ethereum tx summaries",
+    secret: true,
+    hint: (
+      <>
+        Decodes contract methods in the transaction explainer.{" "}
+        <a
+          href="https://etherscan.io/apis"
+          target="_blank"
+          rel="noreferrer"
+        >
+          Free tier <IconExternal />
+        </a>
+      </>
+    ),
+  },
+  {
+    id: "dexToolsApiKey",
+    label: "DEXTools API key",
+    placeholder: "required for token research",
+    secret: true,
+    hint: (
+      <>
+        Powers token prices, market caps and the swap tax audit.{" "}
+        <a
+          href="https://developer.dextools.io/"
+          target="_blank"
+          rel="noreferrer"
+        >
+          developer.dextools.io <IconExternal />
+        </a>
+      </>
+    ),
+  },
+  {
+    id: "covalentApiKey",
+    label: "Covalent API key",
+    placeholder: "required for portfolios",
+    secret: true,
+    hint: (
+      <>
+        Fetches every token balance for a wallet in one call.{" "}
+        <a
+          href="https://goldrush.dev/"
+          target="_blank"
+          rel="noreferrer"
+        >
+          goldrush.dev <IconExternal />
+        </a>
+      </>
+    ),
+  },
+];
+
+export default function Settings({
+  settings,
+  onChange,
+}: {
+  settings: S;
+  onChange: (s: S) => void;
+}) {
+  const [reveal, setReveal] = useState<Record<string, boolean>>({});
+  const [proxy, setProxy] = useState(getProxyPrefix());
+  const [savedProxy, setSavedProxy] = useState(false);
+  const caps = capabilities(settings);
+
+  const set = (id: keyof S, value: string) =>
+    onChange({ ...settings, [id]: value });
+
+  return (
+    <div className="content-pad">
+      <Banner tone="warn">
+        <strong>Your keys stay in this browser.</strong> This is a static site with no
+        backend — everything you type here is saved to <code>localStorage</code> on
+        your own machine and sent only to the matching provider. That also means
+        anyone with access to this browser profile can read them, and any browser
+        extension can too. Use free-tier, read-only keys, and rotate them when you're
+        done experimenting.
+      </Banner>
+
+      <div className="card">
+        <h2 className="card-title">What's available right now</h2>
+        <p className="card-sub">
+          Each SDK capability needs its own data provider. The copilot itself is free —
+          TypeAI hosts the model.
+        </p>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+          {caps.map((c) => (
+            <span
+              key={c.id}
+              className={`chip ${c.ready ? "ok" : "warn"}`}
+              title={c.needs}
+            >
+              <span className="dot" />
+              {c.label}
+              {!c.ready && " — needs a key"}
+            </span>
+          ))}
+        </div>
+      </div>
+
+      <div className="card">
+        <h2 className="card-title">Providers</h2>
+        <p className="card-sub">
+          These map one-to-one onto the <code>TypeAiClient</code> constructor options.
+          Changes take effect on the next request.
+        </p>
+
+        {FIELDS.map((f) => (
+          <div className="field" key={f.id}>
+            <label htmlFor={`f-${f.id}`}>{f.label}</label>
+            <div style={{ display: "flex", gap: 8 }}>
+              <input
+                id={`f-${f.id}`}
+                className="input mono"
+                type={f.secret && !reveal[f.id] ? "password" : "text"}
+                value={settings[f.id] ?? ""}
+                placeholder={f.placeholder}
+                autoComplete="off"
+                spellCheck={false}
+                onChange={(e) => set(f.id, e.target.value)}
+              />
+              {f.secret && (
+                <button
+                  className="btn sm ghost"
+                  type="button"
+                  onClick={() =>
+                    setReveal((r) => ({ ...r, [f.id]: !r[f.id] }))
+                  }
+                >
+                  {reveal[f.id] ? "Hide" : "Show"}
+                </button>
+              )}
+            </div>
+            <div className="hint">{f.hint}</div>
+            {f.id === "covalentApiKey" &&
+              settings.covalentApiKey &&
+              !covalentKeyLooksValid(settings.covalentApiKey) && (
+                <div className="hint" style={{ color: "var(--amber)" }}>
+                  This doesn't look like a Covalent key — they read{" "}
+                  <code>ckey_</code> followed by 27 hex characters, or{" "}
+                  <code>cqt_</code> followed by 28. Covalent's client checks the
+                  format itself and won't send the request.
+                </div>
+              )}
+          </div>
+        ))}
+
+        <div className="row" style={{ marginTop: 6 }}>
+          <button
+            className="btn danger"
+            onClick={() => {
+              clearSettings();
+              onChange({ ...DEFAULTS });
+            }}
+          >
+            Clear all keys
+          </button>
+          <span className="faint" style={{ fontSize: 12 }}>
+            Wipes them from this browser and restores the public defaults.
+          </span>
+        </div>
+      </div>
+
+      <div className="card">
+        <h2 className="card-title">Connectivity</h2>
+        <p className="card-sub">
+          The copilot calls <code>{TYPEAI_ORIGIN}</code> straight from the browser. If
+          that origin doesn't send CORS headers for this domain, the request will fail
+          with a network error and no amount of retrying will fix it — the browser
+          blocks it before it leaves.
+        </p>
+        <div className="field">
+          <label htmlFor="proxy">CORS proxy prefix (optional)</label>
+          <input
+            id="proxy"
+            className="input mono"
+            value={proxy}
+            placeholder="https://my-proxy.example.com/?url={url}"
+            onChange={(e) => {
+              setProxy(e.target.value);
+              setSavedProxy(false);
+            }}
+          />
+          <div className="hint">
+            Only used for the TypeAI origin, never for your RPC or key-bearing
+            requests. Include <code>{"{url}"}</code> to have the target URL
+            percent-encoded into that spot; otherwise the target is appended to the
+            prefix. Run your own — public open proxies see everything you send.
+          </div>
+        </div>
+        <div className="row">
+          <button
+            className="btn"
+            onClick={() => {
+              setProxyPrefix(proxy.trim());
+              setSavedProxy(true);
+            }}
+          >
+            Save proxy setting
+          </button>
+          {savedProxy && (
+            <span className="chip ok">
+              <span className="dot" /> Saved
+            </span>
+          )}
+        </div>
+      </div>
+
+      <div className="card">
+        <h2 className="card-title">About</h2>
+        <p className="card-sub" style={{ marginBottom: 10 }}>
+          Built on{" "}
+          <a
+            href="https://www.npmjs.com/package/type-ai-sdk"
+            target="_blank"
+            rel="noreferrer"
+          >
+            type-ai-sdk <IconExternal />
+          </a>{" "}
+          — every panel in this app is a direct call to one of its seven methods.
+        </p>
+        <dl className="kv">
+          <dt>Copilot</dt>
+          <dd className="mono">client.prompt()</dd>
+          <dt>Portfolio</dt>
+          <dd className="mono">client.getTokenPortfolio()</dd>
+          <dt>Token research</dt>
+          <dd className="mono">
+            client.getTokenDetails() · client.getTokenBalance()
+          </dd>
+          <dt>Transactions</dt>
+          <dd className="mono">
+            client.getTransactionSummary() · client.getTransactionFee()
+          </dd>
+          <dt>Trade</dt>
+          <dd className="mono">client.swapTokens() · client.sendToken()</dd>
+        </dl>
+      </div>
+    </div>
+  );
+}
