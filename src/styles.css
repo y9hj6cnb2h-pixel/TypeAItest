@@ -1414,3 +1414,14 @@ select {
     font-size: 10px;
   }
 }
+
+.proxy-presets {
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  border-radius: var(--radius-sm);
+  padding: 13px 14px;
+  margin-bottom: 16px;
+}
+.proxy-preset-head {
+  margin-bottom: 8px;
+}

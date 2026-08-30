@@ -110,6 +110,15 @@ const FIELDS: KeyField[] = [
   },
 ];
 
+/**
+ * Public relays that accept a POST with a JSON body. The copilot call carries no
+ * credentials, so the only thing one of these sees is the question text.
+ */
+const PUBLIC_PROXIES = [
+  { label: "corsproxy.io", value: "https://corsproxy.io/?url={url}" },
+  { label: "codetabs", value: "https://api.codetabs.com/v1/proxy?quest={url}" },
+];
+
 export default function Settings({
   settings,
   onChange,
@@ -244,6 +253,48 @@ export default function Settings({
           abused as an open relay. Paste your worker URL below, keeping the trailing
           slash.
         </p>
+        <div className="proxy-presets">
+          <div className="proxy-preset-head">
+            <span className="chip ok">
+              <span className="dot" /> One tap, no account
+            </span>
+          </div>
+          <p className="hint" style={{ margin: "0 0 10px" }}>
+            Route through a public relay. It only ever carries the copilot call, which
+            sends <strong>no API key and no auth header</strong> — just your question
+            text — so nothing credential-bearing passes through it. It is a third party
+            you don't control though, and free relays rate-limit, so treat this as a way
+            to get going and move to your own worker when you care.
+          </p>
+          <div className="row">
+            {PUBLIC_PROXIES.map((pp) => (
+              <button
+                key={pp.value}
+                className="btn sm"
+                onClick={() => {
+                  setProxy(pp.value);
+                  setProxyPrefix(pp.value);
+                  setSavedProxy(true);
+                }}
+              >
+                Use {pp.label}
+              </button>
+            ))}
+            {proxy && (
+              <button
+                className="btn sm ghost danger"
+                onClick={() => {
+                  setProxy("");
+                  setProxyPrefix("");
+                  setSavedProxy(true);
+                }}
+              >
+                Turn proxy off
+              </button>
+            )}
+          </div>
+        </div>
+
         <div className="field">
           <label htmlFor="proxy">CORS proxy prefix (optional)</label>
           <input
@@ -260,8 +311,9 @@ export default function Settings({
             Only used for the TypeAI origin — never for your RPC endpoints or any
             key-bearing request, which keep going direct. The target URL is appended to
             this prefix; include <code>{"{url}"}</code> instead if your proxy wants it
-            percent-encoded as a query parameter. Run your own: a public open proxy
-            would see every question you ask.
+            percent-encoded as a query parameter. Your own worker is the sturdier
+            option — a public relay is someone else's server and can rate-limit or
+            disappear.
           </div>
         </div>
         <div className="row">
@@ -296,7 +348,11 @@ export default function Settings({
           — every panel in this app is a direct call to one of its seven methods.
         </p>
         <dl className="kv">
-          <dt>Copilot</dt>
+          <dt>Scan</dt>
+          <dd className="mono">
+            getTokenBalance() · getTransactionFee() · getTokenPortfolio() · prompt()
+          </dd>
+          <dt>Ask</dt>
           <dd className="mono">client.prompt()</dd>
           <dt>Portfolio</dt>
           <dd className="mono">client.getTokenPortfolio()</dd>
