@@ -161,7 +161,10 @@ export default function Copilot({
         // The hosted model is only the router. Its tools still work, so route the
         // question here and answer from the SDK's own output rather than giving up.
         try {
-          const local = await answerLocally(client, augmented, chain, wallet?.address);
+          const local = await answerLocally(client, augmented, chain, wallet?.address, {
+            dexTools: settings.dexToolsApiKey,
+            etherscan: settings.etherscanApiKey,
+          });
           if (local) {
             setMessages((m) => [
               ...m,

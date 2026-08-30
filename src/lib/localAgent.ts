@@ -1,5 +1,6 @@
 import type { TypeAiClient } from "type-ai-sdk";
 import { readMessage } from "./client";
+import { keylessTokenDetails, keylessTxSummary } from "./keyless";
 import { recordLocalTool } from "./netlog";
 import type { Chain } from "./wallet";
 
@@ -67,6 +68,7 @@ export async function answerLocally(
   message: string,
   chain: Chain,
   walletAddress?: string,
+  keys?: { dexTools?: string; etherscan?: string },
 ): Promise<LocalAnswer | null> {
   const q = message.toLowerCase();
   const mine = /\bmy\b|\bmine\b|\bi hold\b|\bi own\b/.test(q);
@@ -110,6 +112,14 @@ export async function answerLocally(
   // 1. Explain a transaction — a hash in the text is an unambiguous signal.
   const hash = findTxHash(message, chain);
   if (hash) {
+    if (chain === "ethereum" && !keys?.etherscan) {
+      recordLocalTool("get_transaction_summary", { transactionHash: hash, via: "blockscout" });
+      return {
+        text: await keylessTxSummary(hash),
+        tool: "get_transaction_summary",
+        args: { transactionHash: hash, blockchain: chain },
+      };
+    }
     const res = await run("get_transaction_summary", { transactionHash: hash, blockchain: chain }, () =>
       client.getTransactionSummary({
         transactionHash: hash,
@@ -175,6 +185,23 @@ export async function answerLocally(
   // 5. Token research.
   const token = findToken(message);
   if (token && /price|worth|details|market cap|supply|about|tell me|what is|info/.test(q)) {
+    if (!keys?.dexTools) {
+      recordLocalTool("all_token_details", { token, blockchain: chain, via: "dexscreener" });
+      const d = await keylessTokenDetails(token, chain);
+      const line = [
+        d.name ? `${d.name} (${d.symbol ?? token})` : token,
+        d.currentPrice ? `trades at $${d.currentPrice}` : null,
+        d.priceChange24h ? `${d.priceChange24h} over 24h` : null,
+        d.marketCap ? `market cap $${Number(d.marketCap).toLocaleString("en-US")}` : null,
+      ]
+        .filter(Boolean)
+        .join(", ");
+      return {
+        text: `${line}.${d.contractAddress ? `\n\nContract: ${d.contractAddress}` : ""}`,
+        tool: "all_token_details",
+        args: { token, blockchain: chain },
+      };
+    }
     const res = await run("all_token_details", { token, blockchain: chain }, () =>
       client.getTokenDetails({ token, blockchain: chain as never }),
     );

@@ -13,6 +13,7 @@ import {
   resetDiagnosis,
   SDK_GENERIC_FAILURE,
 } from "../lib/netlog";
+import { keylessPortfolio } from "../lib/keyless";
 import Donut, { SLICE_COLORS, type Slice } from "./Donut";
 import { PoweredBy } from "./Brand";
 import { ChainToggle, ErrorBox, IconBolt, IconWallet, Spinner } from "./ui";
@@ -171,9 +172,28 @@ export default function Scan({
         out.notes.push(`Holdings unavailable — ${describeError(err)}`);
       }
     } else {
-      out.notes.push(
-        "Add a Covalent key in Settings to include the full token breakdown.",
-      );
+      // No Covalent key: Blockscout (Ethereum) or the public RPC (Solana) still
+      // return the full holding list, priced where a market exists.
+      setStage("Pulling token holdings");
+      try {
+        out.holdings = await keylessPortfolio(target, chain, settings.solanaRpcUrl);
+        out.notes.push(
+          `Holdings read without an API key via ${chain === "ethereum" ? "Blockscout" : "the public Solana RPC and DEX Screener"}.`,
+        );
+      } catch (err) {
+        out.notes.push(`Holdings unavailable — ${describeError(err)}`);
+      }
+    }
+
+    // The keyless provider returns the native coin as a holding too. If the RPC
+    // balance call came back empty, use it rather than reporting a contradictory zero.
+    if (!out.native?.balance) {
+      const nativeRow = out.holdings?.find((h) => h.contract_address === "native");
+      if (nativeRow?.balance)
+        out.native = {
+          balance: Number(nativeRow.balance),
+          symbol: nativeRow.symbol ?? native,
+        };
     }
 
     // 3. Ask the model to read the wallet, given what we just gathered.

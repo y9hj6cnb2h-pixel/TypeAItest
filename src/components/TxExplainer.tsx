@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { getClient, describeError, readMessage } from "../lib/client";
+import { keylessTxSummary } from "../lib/keyless";
 import type { Settings } from "../lib/config";
 import { explorerTxUrl, type Chain } from "../lib/wallet";
 import {
@@ -67,6 +68,11 @@ export default function TxExplainer({
     setError(null);
     setSummary("");
     try {
+      if (chain === "ethereum" && !settings.etherscanApiKey) {
+        // No key: Blockscout decodes the method and the transfers just as well.
+        setSummary(await keylessTxSummary(h));
+        return;
+      }
       const res = await getClient(settings).getTransactionSummary({
         transactionHash: h,
         blockchain: chain as never,
@@ -86,10 +92,10 @@ export default function TxExplainer({
   return (
     <div className="content-pad">
       {needsEtherscan && (
-        <Banner tone="warn">
-          Ethereum transaction summaries need an Etherscan API key to decode contract
-          calls. <strong>Add one in Settings</strong>, or switch to Solana, which only
-          needs an RPC URL.
+        <Banner>
+          No Etherscan key set, so Ethereum transactions are decoded by{" "}
+          <strong>Blockscout</strong> — free, no key, no account. Solana summaries use
+          the public RPC and never needed a key.
         </Banner>
       )}
 

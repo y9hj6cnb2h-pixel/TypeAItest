@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { getClient, describeError, readMessage } from "../lib/client";
 import { covalentKeyLooksValid, type Settings } from "../lib/config";
+import { keylessPortfolio } from "../lib/keyless";
 import { explorerAddressUrl, shortAddress, type Chain, type WalletState } from "../lib/wallet";
 import { amount, usd } from "../lib/format";
 import Donut, { SLICE_COLORS, type Slice } from "./Donut";
@@ -49,6 +50,7 @@ export default function Portfolio({
   const [summary, setSummary] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [keyless, setKeyless] = useState(false);
 
   async function load() {
     const addr = address.trim();
@@ -57,7 +59,18 @@ export default function Portfolio({
     setError(null);
     setHoldings(null);
     setSummary("");
+    const useCovalent =
+      Boolean(settings.covalentApiKey) && covalentKeyLooksValid(settings.covalentApiKey);
     try {
+      if (!useCovalent) {
+        // No key: read balances from Blockscout / public RPC instead.
+        const rows = await keylessPortfolio(addr, chain, settings.solanaRpcUrl);
+        setHoldings(rows as Holding[]);
+        setKeyless(true);
+        if (!rows.length) setError("That wallet holds no priced tokens on " + chain + ".");
+        return;
+      }
+      setKeyless(false);
       const res = await getClient(settings).getTokenPortfolio({
         walletAddress: addr,
         blockchain: chain,
@@ -97,9 +110,11 @@ export default function Portfolio({
   return (
     <div className="content-pad">
       {!settings.covalentApiKey && (
-        <Banner tone="warn">
-          Portfolio lookups go through Covalent, which needs an API key.{" "}
-          <strong>Add one in Settings</strong> — the free tier is enough for this.
+        <Banner>
+          No Covalent key set, so balances come from{" "}
+          <strong>{chain === "ethereum" ? "Blockscout" : "the public Solana RPC"}</strong>{" "}
+          instead — free, no key, no account. Adding a Covalent key in Settings gives
+          richer pricing and NFT data, but nothing here requires it.
         </Banner>
       )}
       {settings.covalentApiKey && !covalentKeyLooksValid(settings.covalentApiKey) && (
@@ -162,6 +177,12 @@ export default function Portfolio({
       {holdings && tokens.length > 0 && (
         <>
           <div className="card">
+            {keyless && (
+              <p className="faint" style={{ fontSize: 11.5, margin: "0 0 12px" }}>
+                Read without an API key via{" "}
+                {chain === "ethereum" ? "Blockscout" : "the public Solana RPC and DEX Screener"}.
+              </p>
+            )}
             <div className="stat-row" style={{ marginBottom: 18 }}>
               <div className="stat">
                 <div className="k">Total value</div>

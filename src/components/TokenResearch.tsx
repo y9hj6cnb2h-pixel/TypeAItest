@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { getClient, describeError, readMessage } from "../lib/client";
+import { keylessTokenDetails } from "../lib/keyless";
 import type { Settings } from "../lib/config";
 import { explorerAddressUrl, shortAddress, type Chain, type WalletState } from "../lib/wallet";
 import { amount, compact, percent, usd } from "../lib/format";
@@ -55,6 +56,11 @@ export default function TokenResearch({
     setDetails(null);
     setNote("");
     try {
+      if (!settings.dexToolsApiKey) {
+        // No key: DEX Screener covers price, market cap and the contract address.
+        setDetails(await keylessTokenDetails(token.trim(), chain));
+        return;
+      }
       const res = await getClient(settings).getTokenDetails({
         token: token.trim(),
         blockchain: chain as never,
@@ -106,9 +112,10 @@ export default function TokenResearch({
   return (
     <div className="content-pad">
       {!settings.dexToolsApiKey && (
-        <Banner tone="warn">
-          Token details are served by DEXTools, which needs an API key.{" "}
-          <strong>Add one in Settings</strong> to unlock this panel.
+        <Banner>
+          No DEXTools key set, so token data comes from <strong>DEX Screener</strong> —
+          free, no key, no account. A DEXTools key adds supply figures and the swap tax
+          audit, but price, market cap and contract lookups work without one.
         </Banner>
       )}
 

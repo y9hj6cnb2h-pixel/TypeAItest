@@ -60,15 +60,28 @@ swallows internal errors and returns generic messages.
 
 ## Configuration
 
-There is no backend. Keys are entered in the **Settings** panel and kept in
-`localStorage` in your browser, then passed straight to `TypeAiClient`. They are sent
+**No API keys are required.** Every panel works on free public endpoints that need no
+account and send CORS headers, so the browser can call them directly:
+
+| Gap | Keyless provider | What a key adds |
+| --- | --- | --- |
+| Token details (DEXTools) | DEX Screener | supply figures, swap tax audit |
+| Portfolio (Covalent) | Blockscout (ETH), public RPC + DEX Screener (SOL) | richer pricing, NFTs |
+| Ethereum tx summary (Etherscan) | Blockscout | nothing material |
+| Ethereum / Solana reads | public RPC nodes | higher rate limits |
+
+These live in `src/lib/keyless.ts` and return the same shapes the SDK does, so the
+panels render them without knowing which provider answered. Keys are optional upgrades.
+
+There is no backend. Any keys you do add are entered in the **Settings** panel and kept
+in `localStorage` in your browser, then passed straight to `TypeAiClient`. They are sent
 only to the matching provider.
 
 Because this is a static site, anyone with access to your browser profile (or any
 extension running in it) can read those keys. Use free-tier, read-only keys and rotate
 them when you're done.
 
-| Setting | Needed for | Notes |
+| Optional setting | Improves | Notes |
 | --- | --- | --- |
 | Ethereum RPC URL | all Ethereum reads | defaults to a public, rate-limited node |
 | Solana RPC URL | all Solana reads | defaults to the public mainnet endpoint |
@@ -77,7 +90,7 @@ them when you're done.
 | DEXTools API key | token research, swap tax audit | |
 | Covalent API key | portfolios | must be `ckey_…` or `cqt_…` — the client validates the format locally and won't send a request otherwise |
 
-The copilot itself needs no key: TypeAI hosts the model.
+The copilot needs no key either: TypeAI hosts the model.
 
 ## Notes on browser support
 

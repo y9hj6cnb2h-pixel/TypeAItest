@@ -110,20 +110,26 @@ export function capabilities(s: Settings): Capability[] {
     {
       id: "tokens",
       label: "Token research",
-      ready: Boolean(s.dexToolsApiKey),
-      needs: "A DEXTools API key (Solana falls back to DEX Screener)",
+      ready: true,
+      needs: s.dexToolsApiKey
+        ? "Using your DEXTools key"
+        : "Free via DEX Screener — no key needed",
     },
     {
       id: "portfolio",
       label: "Portfolio",
-      ready: Boolean(s.covalentApiKey),
-      needs: "A Covalent API key",
+      ready: true,
+      needs: s.covalentApiKey
+        ? "Using your Covalent key"
+        : "Free via Blockscout and public RPC — no key needed",
     },
     {
       id: "txsum",
       label: "Transaction explainer",
-      ready: Boolean(s.etherscanApiKey) || Boolean(s.solanaRpcUrl),
-      needs: "An Etherscan key (Ethereum) or Solana RPC URL",
+      ready: true,
+      needs: s.etherscanApiKey
+        ? "Using your Etherscan key"
+        : "Free via Blockscout — no key needed",
     },
   ];
 }

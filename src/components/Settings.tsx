@@ -136,8 +136,15 @@ export default function Settings({
 
   return (
     <div className="content-pad">
+      <Banner>
+        <strong>Sonari needs no keys.</strong> Every panel works out of the box on free
+        public endpoints — Blockscout, DEX Screener and public RPC nodes — none of which
+        need an account. The fields below are optional upgrades: they raise rate limits
+        and add a little extra data. You never have to hand a key to anyone.
+      </Banner>
+
       <Banner tone="warn">
-        <strong>Your keys stay in this browser.</strong> This is a static site with no
+        <strong>If you do add keys, they stay in this browser.</strong> This is a static site with no
         backend — everything you type here is saved to <code>localStorage</code> on
         your own machine and sent only to the matching provider. That also means
         anyone with access to this browser profile can read them, and any browser
@@ -148,8 +155,8 @@ export default function Settings({
       <div className="card">
         <h2 className="card-title">What's available right now</h2>
         <p className="card-sub">
-          Each SDK capability needs its own data provider. The copilot itself is free —
-          TypeAI hosts the model.
+          Everything is available with no key at all. Hover a chip to see which provider
+          is answering and what a key would change.
         </p>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
           {caps.map((c) => (
@@ -169,7 +176,8 @@ export default function Settings({
       <div className="card">
         <h2 className="card-title">Providers</h2>
         <p className="card-sub">
-          These map one-to-one onto the <code>TypeAiClient</code> constructor options.
+          All optional. These map one-to-one onto the <code>TypeAiClient</code>
+          constructor options; leave them empty and the free providers are used instead.
           Changes take effect on the next request.
         </p>
 
