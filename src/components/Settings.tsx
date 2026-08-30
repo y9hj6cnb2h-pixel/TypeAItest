@@ -238,6 +238,15 @@ export default function Settings({
           network error. The request is not malformed and retrying will not fix it.
         </p>
         <p className="card-sub">
+          <strong>You don't have to fix this to use Sonari.</strong> The hosted model
+          only chooses which tool to run and polishes the wording — the SDK's tools
+          themselves reach CORS-clean endpoints and already return readable prose. When
+          the model is unreachable, Ask routes your question in the browser and answers
+          from the SDK's own output, and Scan composes its read from the same numbers.
+          Both are labelled so you know which answered. A proxy buys you the model's
+          judgement and free-form phrasing, nothing more.
+        </p>
+        <p className="card-sub">
           A proxy sits outside the browser, where same-origin rules don't apply: it
           forwards the call and re-serves the answer with the header the browser wants.
           This repo ships one — <code>proxy/cloudflare-worker.js</code>, a single file

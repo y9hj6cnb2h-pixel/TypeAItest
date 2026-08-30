@@ -59,6 +59,10 @@ const emitNet = (e: NetEvent) => {
 };
 const emitStep = (s: AgentStep) => stepListeners.forEach((fn) => fn(s));
 
+/** Let the offline router put its tool choice in the same trace as the hosted one. */
+export const recordLocalTool = (name: string, args: Record<string, unknown>) =>
+  emitStep({ id: nextId(), ts: Date.now(), kind: "tool", name, args });
+
 let seq = 0;
 const nextId = () => `${Date.now().toString(36)}-${(seq++).toString(36)}`;
 

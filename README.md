@@ -107,7 +107,15 @@ A browser reports a blocked cross-origin response and an unreachable host identi
 To tell them apart, open <https://api.typeai.live> in a tab: if anything loads, the host
 is up and it is CORS.
 
-The fix is a proxy, which sits outside the browser where same-origin rules don't apply.
+**The app works without solving this.** The hosted model only picks the tool and
+phrases the reply; the SDK's tools already return readable prose of their own
+("The current gas price is 12 gwei…"). So when the model is unreachable, Ask routes the
+question in the browser (`src/lib/localAgent.ts`) and answers from the SDK's own output,
+and Scan composes its read from the same numbers. Both label themselves *offline
+routing* / *offline read*, so the source is never ambiguous. What a proxy buys you is
+the model's judgement and free-form phrasing — not the on-chain data.
+
+If you do want that, a proxy sits outside the browser where same-origin rules don't apply.
 This repo ships one: [`proxy/cloudflare-worker.js`](proxy/cloudflare-worker.js) — a
 single file you deploy free on Cloudflare Workers in about two minutes. It forwards
 **only** to `api.typeai.live`, so it can't be abused as an open relay. Paste the worker

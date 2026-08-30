@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { ITypeAiClientMessage, IResponseConstructorOutput } from "type-ai-sdk";
 import { getClient, describeError, readMessage } from "../lib/client";
+import { answerLocally } from "../lib/localAgent";
 import type { Settings } from "../lib/config";
 import { shortAddress, type Chain, type WalletState } from "../lib/wallet";
 import {
@@ -19,6 +20,8 @@ type ChatMsg = {
   text: string;
   chain: Chain;
   data?: unknown;
+  /** Answered by the offline router because the hosted model was unreachable. */
+  local?: boolean;
 };
 
 type Suggestion = { label: string; query: string };
@@ -150,7 +153,43 @@ export default function Copilot({
         // The failing request's outcome can land a tick after prompt() rejects, so
         // yield once before reading it — otherwise we diagnose from a half-filled tap.
         await new Promise((r) => setTimeout(r, 60));
-        setError(diagnoseAgentFailure());
+        const reason = diagnoseAgentFailure();
+
+        // The hosted model is only the router. Its tools still work, so route the
+        // question here and answer from the SDK's own output rather than giving up.
+        try {
+          const local = await answerLocally(client, augmented, chain, wallet?.address);
+          if (local) {
+            setMessages((m) => [
+              ...m,
+              {
+                id: crypto.randomUUID(),
+                role: "assistant" as const,
+                text: local.text,
+                chain,
+                data: local.data,
+                local: true,
+              },
+            ]);
+            setHistory((h) => [
+              ...h,
+              { role: "user", content: augmented },
+              { role: "assistant", content: local.text },
+            ]);
+            setBusy(false);
+            return;
+          }
+        } catch (fallbackErr) {
+          setError(`${reason} Offline fallback also failed: ${describeError(fallbackErr)}`);
+          setBusy(false);
+          return;
+        }
+
+        setError(
+          `${reason} I also tried answering it here without the hosted model, but ` +
+            `couldn't tell which on-chain tool you wanted. Try naming one directly — ` +
+            `gas fees, a token's price, a wallet balance, or a transaction hash.`,
+        );
         setBusy(false);
         return;
       }
@@ -308,7 +347,10 @@ function Intro({
         Sonari runs on the TypeAI SDK. A hosted model reads your question and picks
         an on-chain tool; the SDK then executes that tool right here in your browser
         and writes the answer back in plain English. Open the{" "}
-        <strong>Agent trace</strong> to watch every step as it happens.
+        <strong>Agent trace</strong> to watch every step as it happens. If the hosted
+        model can't be reached, Sonari routes the question itself and answers from the
+        SDK's own output — marked <em>offline routing</em> so you always know which
+        answered.
       </p>
       <div className="suggestions">
         {SUGGESTIONS[chain].map((s) => (
@@ -332,7 +374,14 @@ function Message({ msg }: { msg: ChatMsg }) {
     <div className={`msg ${msg.role === "user" ? "user" : "bot"}`}>
       <div className="msg-avatar">{msg.role === "user" ? "You" : "AI"}</div>
       <div className="msg-body">
-        <div className="msg-who">{msg.role === "user" ? "You" : "Copilot"}</div>
+        <div className="msg-who">
+          {msg.role === "user" ? "You" : "Copilot"}
+          {msg.local && (
+            <span className="chip warn local-chip" title="The hosted TypeAI model was unreachable, so the question was routed in your browser and answered with the SDK tool's own output.">
+              offline routing
+            </span>
+          )}
+        </div>
         <div className="msg-text">{msg.text}</div>
         {tx ? <SignPanel tx={tx} chain={msg.chain} compact /> : null}
       </div>

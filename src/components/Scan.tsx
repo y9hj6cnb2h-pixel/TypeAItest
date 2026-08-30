@@ -34,8 +34,47 @@ type Report = {
   gas?: string;
   holdings?: Holding[];
   verdict?: string;
+  /** True when the read was composed here because the hosted model was unreachable. */
+  verdictLocal?: boolean;
   notes: string[];
 };
+
+/**
+ * A deterministic read for when the hosted model can't be reached. It says less than
+ * the model would, but it is drawn from the same numbers and keeps the scan complete.
+ */
+function localRead(out: Report): string | undefined {
+  const tokens = (out.holdings ?? []).filter((h) => h.type !== "nft");
+  const ranked = tokens
+    .map((h) => ({ h, v: parseUsd(h) }))
+    .sort((a, b) => b.v - a.v);
+  const total = ranked.reduce((s, x) => s + x.v, 0);
+  const parts: string[] = [];
+
+  if (out.native)
+    parts.push(
+      `Holds ${amount(out.native.balance)} ${out.native.symbol} natively.`,
+    );
+  if (!ranked.length) return parts.length ? parts.join(" ") : undefined;
+
+  parts.push(
+    `Across ${tokens.length} priced token${tokens.length === 1 ? "" : "s"} the ` +
+      `wallet is worth about ${usd(total)}.`,
+  );
+  const top = ranked[0];
+  if (total > 0 && top) {
+    const pct = (top.v / total) * 100;
+    parts.push(
+      `${top.h.symbol ?? "Its largest position"} alone is ${pct.toFixed(0)}% of that, ` +
+        (pct > 70
+          ? "so the wallet lives or dies on that one position."
+          : pct > 40
+            ? "a meaningful concentration but not everything."
+            : "so it is reasonably spread out."),
+    );
+  }
+  return parts.join(" ");
+}
 
 const parseUsd = (h: Holding) =>
   typeof h.quote === "number" && Number.isFinite(h.quote)
@@ -171,6 +210,15 @@ export default function Scan({
       out.notes.push(`AI read unavailable — ${describeError(err)}`);
     }
 
+    // No hosted read? Compose one from the numbers we already have.
+    if (!out.verdict) {
+      const local = localRead(out);
+      if (local) {
+        out.verdict = local;
+        out.verdictLocal = true;
+      }
+    }
+
     setStage("");
     setBusy(false);
     if (!out.native && !out.holdings && !out.verdict) {
@@ -292,9 +340,18 @@ export default function Scan({
           {report.verdict && (
             <div className="card verdict">
               <div className="verdict-head">
-                <span className="chip ok">
-                  <span className="dot" /> TypeAI read
-                </span>
+                {report.verdictLocal ? (
+                  <span
+                    className="chip warn"
+                    title="The hosted TypeAI model was unreachable, so this was composed in your browser from the same SDK data."
+                  >
+                    <span className="dot" /> Offline read
+                  </span>
+                ) : (
+                  <span className="chip ok">
+                    <span className="dot" /> TypeAI read
+                  </span>
+                )}
                 <PoweredBy compact />
               </div>
               <p className="verdict-text">{report.verdict}</p>

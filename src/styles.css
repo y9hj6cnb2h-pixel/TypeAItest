@@ -1425,3 +1425,11 @@ select {
 .proxy-preset-head {
   margin-bottom: 8px;
 }
+
+.local-chip {
+  margin-left: 8px;
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 10px;
+  vertical-align: middle;
+}
