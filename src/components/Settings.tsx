@@ -223,10 +223,26 @@ export default function Settings({
       <div className="card">
         <h2 className="card-title">Connectivity</h2>
         <p className="card-sub">
-          The copilot calls <code>{TYPEAI_ORIGIN}</code> straight from the browser. If
-          that origin doesn't send CORS headers for this domain, the request will fail
-          with a network error and no amount of retrying will fix it — the browser
-          blocks it before it leaves.
+          The copilot calls <code>{TYPEAI_ORIGIN}</code> straight from the browser. That
+          API does not send an <code>Access-Control-Allow-Origin</code> header, so the
+          browser refuses to hand the response to this page and the SDK reports a
+          network error. The request is not malformed and retrying will not fix it.
+        </p>
+        <p className="card-sub">
+          A proxy sits outside the browser, where same-origin rules don't apply: it
+          forwards the call and re-serves the answer with the header the browser wants.
+          This repo ships one — <code>proxy/cloudflare-worker.js</code>, a single file
+          you deploy free on{" "}
+          <a
+            href="https://dash.cloudflare.com"
+            target="_blank"
+            rel="noreferrer"
+          >
+            Cloudflare Workers <IconExternal />
+          </a>{" "}
+          in about two minutes. It only forwards to the TypeAI API, so it can't be
+          abused as an open relay. Paste your worker URL below, keeping the trailing
+          slash.
         </p>
         <div className="field">
           <label htmlFor="proxy">CORS proxy prefix (optional)</label>
@@ -234,17 +250,18 @@ export default function Settings({
             id="proxy"
             className="input mono"
             value={proxy}
-            placeholder="https://my-proxy.example.com/?url={url}"
+            placeholder="https://sonari-proxy.you.workers.dev/"
             onChange={(e) => {
               setProxy(e.target.value);
               setSavedProxy(false);
             }}
           />
           <div className="hint">
-            Only used for the TypeAI origin, never for your RPC or key-bearing
-            requests. Include <code>{"{url}"}</code> to have the target URL
-            percent-encoded into that spot; otherwise the target is appended to the
-            prefix. Run your own — public open proxies see everything you send.
+            Only used for the TypeAI origin — never for your RPC endpoints or any
+            key-bearing request, which keep going direct. The target URL is appended to
+            this prefix; include <code>{"{url}"}</code> instead if your proxy wants it
+            percent-encoded as a query parameter. Run your own: a public open proxy
+            would see every question you ask.
           </div>
         </div>
         <div className="row">

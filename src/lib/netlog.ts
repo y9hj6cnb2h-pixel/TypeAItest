@@ -97,11 +97,12 @@ export function diagnoseAgentFailure(): string {
   } else if (call.ms === undefined || call.error || call.status === 0) {
     parts.push(
       `The browser could not complete the request to ${TYPEAI_ORIGIN} ` +
-        `(${call.error ?? "network error"}). This is almost always CORS: the API ` +
-        `did not return an Access-Control-Allow-Origin header for this site, so the ` +
-        `browser blocked the response before the SDK could read it. Retrying will ` +
-        `not help — set a proxy under Settings → Connectivity, or run the app from ` +
-        `an origin the API allows.`,
+        `(${call.error ?? "network error"}). A browser reports a blocked ` +
+        `cross-origin response and an unreachable host identically, so it is one ` +
+        `of two things: the API returned no Access-Control-Allow-Origin header for ` +
+        `this site, or the API itself is down. Open ${TYPEAI_ORIGIN} in a new tab — ` +
+        `if it loads anything at all, the host is up and this is CORS. Retrying ` +
+        `will not help either way; Settings → Connectivity explains the fix.`,
     );
   } else if (call.status && call.status >= 400) {
     parts.push(

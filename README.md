@@ -95,9 +95,24 @@ JSON-stringifies every `message` field before returning it, so prose answers arr
 wrapped in quotes and structured answers arrive as JSON strings. `readMessage()` in
 `src/lib/client.ts` decodes both.
 
-If the copilot returns a network error, the browser is probably blocking the
-cross-origin call to `api.typeai.live`. **Settings → Connectivity** lets you route just
-that origin through a CORS proxy you run yourself.
+### The `api.typeai.live` CORS wall
+
+The hosted model endpoint does not send an `Access-Control-Allow-Origin` header, so a
+browser refuses to hand its response to the page and the SDK reports a bare
+`Network Error`. This affects `prompt()` — and therefore **Ask** and the Scan verdict —
+from any web origin. Everything else in the app talks to your own RPC and provider
+endpoints, which do send CORS headers, so those panels work regardless.
+
+A browser reports a blocked cross-origin response and an unreachable host identically.
+To tell them apart, open <https://api.typeai.live> in a tab: if anything loads, the host
+is up and it is CORS.
+
+The fix is a proxy, which sits outside the browser where same-origin rules don't apply.
+This repo ships one: [`proxy/cloudflare-worker.js`](proxy/cloudflare-worker.js) — a
+single file you deploy free on Cloudflare Workers in about two minutes. It forwards
+**only** to `api.typeai.live`, so it can't be abused as an open relay. Paste the worker
+URL into **Settings → Connectivity** and the app rewrites just that one origin; your RPC
+and key-bearing requests keep going direct.
 
 ## Deployment
 
