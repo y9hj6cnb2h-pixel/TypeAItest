@@ -149,7 +149,16 @@ A browser reports a blocked cross-origin response and an unreachable host identi
 To tell them apart, open <https://api.typeai.live> in a tab: if anything loads, the host
 is up and it is CORS.
 
-**The app works without solving this.** The hosted model only picks the tool and
+**The deployed app tries to get through on its own.** `src/lib/reach.ts` attempts the
+direct call, then walks a list of public relays until one answers, and remembers the
+winner so later questions go straight through it. The answer is labelled with the relay
+that carried it. This is safe to do automatically because the call carries nothing
+secret — the SDK posts `{message, blockchain, previousMessages}` with no Authorization
+or API-key header; provider keys and RPC traffic are never relayed. Relays are
+third-party servers that rate-limit and disappear, so the Cloudflare Worker below is
+still the sturdier answer.
+
+**And if every route fails, the app still works.** The hosted model only picks the tool and
 phrases the reply; the SDK's tools already return readable prose of their own
 ("The current gas price is 12 gwei…"). So when the model is unreachable, Ask routes the
 question in the browser (`src/lib/localAgent.ts`) and answers from the SDK's own output,

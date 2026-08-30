@@ -229,14 +229,41 @@ function isInteresting(rawUrl: string): boolean {
  */
 export const DEV_PROXY_PREFIX = "/typeai";
 
+/** A relay discovered to work, remembered so later calls go straight through it. */
+const AUTO_RELAY_KEY = "onchain-copilot:auto-relay";
+
+/** Set only while probing relays, so a trial never clobbers the user's setting. */
+let probeOverride: string | null = null;
+export const setProbeProxy = (prefix: string | null) => {
+  probeOverride = prefix;
+};
+
+export function getAutoRelay(): string {
+  try {
+    return localStorage.getItem(AUTO_RELAY_KEY) ?? "";
+  } catch {
+    return "";
+  }
+}
+export function setAutoRelay(prefix: string) {
+  try {
+    if (prefix) localStorage.setItem(AUTO_RELAY_KEY, prefix);
+    else localStorage.removeItem(AUTO_RELAY_KEY);
+  } catch {
+    /* storage unavailable — we just re-probe next time */
+  }
+}
+
 export function getProxyPrefix(): string {
+  if (probeOverride !== null) return probeOverride;
   try {
     const stored = localStorage.getItem(PROXY_KEY);
-    if (stored !== null) return stored;
+    if (stored) return stored;
   } catch {
-    /* fall through to the dev default */
+    /* fall through */
   }
-  return import.meta.env.DEV ? DEV_PROXY_PREFIX : "";
+  if (import.meta.env.DEV) return DEV_PROXY_PREFIX;
+  return getAutoRelay();
 }
 export function setProxyPrefix(v: string) {
   try {

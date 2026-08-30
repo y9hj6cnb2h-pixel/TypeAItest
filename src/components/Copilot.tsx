@@ -1,14 +1,11 @@
 import { useEffect, useRef, useState } from "react";
-import type { ITypeAiClientMessage, IResponseConstructorOutput } from "type-ai-sdk";
+import type { ITypeAiClientMessage } from "type-ai-sdk";
 import { getClient, describeError, readMessage } from "../lib/client";
 import { answerLocally } from "../lib/localAgent";
+import { reachModel } from "../lib/reach";
 import type { Settings } from "../lib/config";
 import { shortAddress, type Chain, type WalletState } from "../lib/wallet";
-import {
-  diagnoseAgentFailure,
-  resetDiagnosis,
-  SDK_GENERIC_FAILURE,
-} from "../lib/netlog";
+import { diagnoseAgentFailure, resetDiagnosis } from "../lib/netlog";
 import AgentTrace from "./AgentTrace";
 import SignPanel, { extractTx } from "./SignPanel";
 import { PoweredBy } from "./Brand";
@@ -22,6 +19,8 @@ type ChatMsg = {
   data?: unknown;
   /** Answered by the offline router because the hosted model was unreachable. */
   local?: boolean;
+  /** The relay that carried the hosted model's answer, when one was needed. */
+  via?: string;
 };
 
 /** Short, actionable headline first; the network post-mortem tucked behind a toggle. */
@@ -89,6 +88,7 @@ export default function Copilot({
   const [error, setError] = useState<ChatError | null>(null);
   const [traceKey, setTraceKey] = useState(0);
   const [traceOpen, setTraceOpen] = useState(false);
+  const [stage, setStage] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
   const taRef = useRef<HTMLTextAreaElement>(null);
 
@@ -120,39 +120,49 @@ export default function Copilot({
 
     try {
       const client = getClient(settings);
-      const result = await client.prompt({
-        message: augmented,
-        blockchain: chain as never,
-        previousMessages: history.slice(-6),
-      });
 
-      const responses: IResponseConstructorOutput[] = Array.isArray(result)
-        ? result
-        : result.responses;
+      // Try the direct call, then every known relay, before giving up on the model.
+      const reached = await reachModel(
+        client,
+        {
+          message: augmented,
+          blockchain: chain,
+          previousMessages: history.slice(-6) as never,
+        },
+        setStage,
+      );
+      setStage("");
 
-      if (!Array.isArray(result)) {
-        setHistory(result.messageHistory as ITypeAiClientMessage[]);
-      } else {
-        setHistory((h) => [
-          ...h,
-          { role: "user", content: augmented },
+      if (reached) {
+        const responses = reached.responses;
+        if (reached.messageHistory) {
+          setHistory(reached.messageHistory as ITypeAiClientMessage[]);
+        } else {
+          setHistory((h) => [
+            ...h,
+            { role: "user", content: augmented },
+            ...responses.map((r) => ({
+              role: "assistant" as const,
+              content: readMessage(r.message).text,
+            })),
+          ]);
+        }
+        setMessages((m) => [
+          ...m,
           ...responses.map((r) => ({
+            id: crypto.randomUUID(),
             role: "assistant" as const,
-            content: readMessage(r.message).text,
+            text: readMessage(r.message).text,
+            chain,
+            data: r.data,
+            via: reached.via ?? undefined,
           })),
         ]);
+        setBusy(false);
+        return;
       }
 
-      if (!responses?.length) {
-        setError({ summary: "The agent returned no response. Try rephrasing the question." });
-      }
-
-      // prompt() catches everything internally and returns this as a normal reply
-      // rather than throwing, so recognise it and surface the real cause.
-      const swallowed = (responses ?? []).some((r) =>
-        readMessage(r.message).text.includes(SDK_GENERIC_FAILURE),
-      );
-      if (swallowed) {
+      {
         // The failing request's outcome can land a tick after prompt() rejects, so
         // yield once before reading it — otherwise we diagnose from a half-filled tap.
         await new Promise((r) => setTimeout(r, 60));
@@ -205,19 +215,10 @@ export default function Copilot({
         return;
       }
 
-      setMessages((m) => [
-        ...m,
-        ...(responses ?? []).map((r) => ({
-          id: crypto.randomUUID(),
-          role: "assistant" as const,
-          text: readMessage(r.message).text,
-          chain,
-          data: r.data,
-        })),
-      ]);
     } catch (err) {
       setError({ summary: describeError(err) });
     } finally {
+      setStage("");
       setBusy(false);
     }
   }
@@ -252,6 +253,11 @@ export default function Copilot({
                     <i />
                     <i />
                   </div>
+                  {stage && (
+                    <div className="faint" style={{ fontSize: 11.5, marginTop: 5 }}>
+                      {stage}…
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -409,6 +415,11 @@ function Message({ msg }: { msg: ChatMsg }) {
       <div className="msg-body">
         <div className="msg-who">
           {msg.role === "user" ? "You" : "Copilot"}
+          {msg.via && (
+            <span className="chip ok local-chip" title={`The hosted TypeAI model answered through the ${msg.via} relay, because this site cannot call the API directly.`}>
+              via {msg.via}
+            </span>
+          )}
           {msg.local && (
             <span className="chip warn local-chip" title="The hosted TypeAI model was unreachable, so the question was routed in your browser and answered with the SDK tool's own output.">
               offline routing

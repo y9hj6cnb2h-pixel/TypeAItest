@@ -8,12 +8,9 @@ import {
   type WalletState,
 } from "../lib/wallet";
 import { amount, usd } from "../lib/format";
-import {
-  diagnoseAgentFailure,
-  resetDiagnosis,
-  SDK_GENERIC_FAILURE,
-} from "../lib/netlog";
+import { diagnoseAgentFailure, resetDiagnosis } from "../lib/netlog";
 import { keylessPortfolio } from "../lib/keyless";
+import { reachModel } from "../lib/reach";
 import Donut, { SLICE_COLORS, type Slice } from "./Donut";
 import { PoweredBy } from "./Brand";
 import { ChainToggle, ErrorBox, IconBolt, IconWallet, Spinner } from "./ui";
@@ -37,6 +34,8 @@ type Report = {
   verdict?: string;
   /** True when the read was composed here because the hosted model was unreachable. */
   verdictLocal?: boolean;
+  /** The relay that carried the hosted model's answer, when one was needed. */
+  verdictVia?: string;
   notes: string[];
 };
 
@@ -211,20 +210,25 @@ export default function Scan({
           .map(({ h, v }) => `${h.symbol ?? "?"} ${amount(h.balance)} (~$${v.toFixed(0)})`);
         facts.push(`Top holdings: ${top.join(", ")}.`);
       }
-      const res = await client.prompt({
-        message:
-          `${facts.join(" ")} In 3 short sentences, describe what kind of wallet ` +
-          `this looks like, how concentrated it is, and one practical observation. ` +
-          `Do not repeat the raw numbers back.`,
-        blockchain: chain as never,
-      });
-      const responses = Array.isArray(res) ? res : res.responses;
-      const text = responses?.map((r) => readMessage(r.message).text).join("\n\n");
-      if (text?.includes(SDK_GENERIC_FAILURE)) {
+      const reached = await reachModel(
+        client,
+        {
+          message:
+            `${facts.join(" ")} In 3 short sentences, describe what kind of wallet ` +
+            `this looks like, how concentrated it is, and one practical observation. ` +
+            `Do not repeat the raw numbers back.`,
+          blockchain: chain,
+        },
+        setStage,
+      );
+      if (reached) {
+        out.verdict = reached.responses
+          .map((r) => readMessage(r.message).text)
+          .join("\n\n");
+        out.verdictVia = reached.via ?? undefined;
+      } else {
         await new Promise((r) => setTimeout(r, 60));
         out.notes.push(`AI read unavailable. ${diagnoseAgentFailure()}`);
-      } else if (text) {
-        out.verdict = text;
       }
     } catch (err) {
       out.notes.push(`AI read unavailable — ${describeError(err)}`);
@@ -370,6 +374,7 @@ export default function Scan({
                 ) : (
                   <span className="chip ok">
                     <span className="dot" /> TypeAI read
+                    {report.verdictVia ? ` · via ${report.verdictVia}` : ""}
                   </span>
                 )}
                 <PoweredBy compact />
