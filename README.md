@@ -158,6 +158,12 @@ or API-key header; provider keys and RPC traffic are never relayed. Relays are
 third-party servers that rate-limit and disappear, so the Cloudflare Worker below is
 still the sturdier answer.
 
+**Settings → Connectivity → "Test all routes"** sends one real request down every route
+from your own browser and reports what came back, so you can see which relays work
+today rather than trusting a list. It validates the response body, not just the status
+code — a relay returning HTTP 200 with an HTML rate-limit page is reported as a failure,
+not a success. Anything that works can be pinned with one tap.
+
 **And if every route fails, the app still works.** The hosted model only picks the tool and
 phrases the reply; the SDK's tools already return readable prose of their own
 ("The current gas price is 12 gwei…"). So when the model is unreachable, Ask routes the

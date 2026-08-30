@@ -6,8 +6,9 @@ import {
   covalentKeyLooksValid,
   type Settings as S,
 } from "../lib/config";
-import { getProxyPrefix, setProxyPrefix, TYPEAI_ORIGIN } from "../lib/netlog";
-import { Banner, IconExternal } from "./ui";
+import { getProxyPrefix, setAutoRelay, setProxyPrefix, TYPEAI_ORIGIN } from "../lib/netlog";
+import { probeRoutes, type ProbeResult } from "../lib/reach";
+import { Banner, IconExternal, Spinner } from "./ui";
 
 type KeyField = {
   id: keyof S;
@@ -129,6 +130,8 @@ export default function Settings({
   const [reveal, setReveal] = useState<Record<string, boolean>>({});
   const [proxy, setProxy] = useState(getProxyPrefix());
   const [savedProxy, setSavedProxy] = useState(false);
+  const [probing, setProbing] = useState("");
+  const [probes, setProbes] = useState<ProbeResult[] | null>(null);
   const caps = capabilities(settings);
 
   const set = (id: keyof S, value: string) =>
@@ -272,6 +275,70 @@ export default function Settings({
         </p>
         <div className="proxy-presets">
           <div className="proxy-preset-head">
+            <span className="chip">Live connection test</span>
+          </div>
+          <p className="hint" style={{ margin: "0 0 10px" }}>
+            Relays come and go, and only your browser can say which ones work from where
+            you are. This sends one real request down every route and reports what came
+            back — then you can pin whichever answered.
+          </p>
+          <div className="row">
+            <button
+              className="btn"
+              disabled={Boolean(probing)}
+              onClick={async () => {
+                setProbes(null);
+                setProbing("starting");
+                const res = await probeRoutes((done, total) =>
+                  setProbing(`testing ${done}/${total}`),
+                );
+                setProbes(res);
+                setProbing("");
+              }}
+            >
+              {probing ? <Spinner /> : null}
+              {probing ? `Testing… ${probing.replace("testing ", "")}` : "Test all routes"}
+            </button>
+          </div>
+
+          {probes && (
+            <ul className="probe-list">
+              {probes.map((r) => (
+                <li key={r.label}>
+                  <span className={`chip ${r.ok ? "ok" : "bad"}`}>
+                    <span className="dot" />
+                    {r.ok ? "works" : "no"}
+                  </span>
+                  <span className="probe-label">{r.label}</span>
+                  <span className="probe-detail faint">
+                    {r.detail} · {r.ms}ms
+                  </span>
+                  {r.ok && r.prefix && (
+                    <button
+                      className="btn sm"
+                      onClick={() => {
+                        setProxy(r.prefix);
+                        setProxyPrefix(r.prefix);
+                        setSavedProxy(true);
+                      }}
+                    >
+                      Use
+                    </button>
+                  )}
+                </li>
+              ))}
+              {probes.every((r) => !r.ok) && (
+                <li className="faint" style={{ display: "block", fontSize: 12 }}>
+                  No route reached the model. Ask still answers on-chain questions
+                  itself, and the Cloudflare Worker above is the reliable fix.
+                </li>
+              )}
+            </ul>
+          )}
+        </div>
+
+        <div className="proxy-presets">
+          <div className="proxy-preset-head">
             <span className="chip ok">
               <span className="dot" /> One tap, no account
             </span>
@@ -303,6 +370,7 @@ export default function Settings({
                 onClick={() => {
                   setProxy("");
                   setProxyPrefix("");
+                  setAutoRelay("");
                   setSavedProxy(true);
                 }}
               >

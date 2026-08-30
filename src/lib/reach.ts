@@ -1,6 +1,7 @@
 import type { TypeAiClient, IResponseConstructorOutput } from "type-ai-sdk";
 import { readMessage } from "./client";
 import {
+  TYPEAI_ORIGIN,
   SDK_GENERIC_FAILURE,
   getAutoRelay,
   resetDiagnosis,
@@ -31,7 +32,90 @@ export const RELAYS: Relay[] = [
   { label: "allorigins", prefix: "https://api.allorigins.win/raw?url={url}" },
   { label: "cors.eu.org", prefix: "https://cors.eu.org/" },
   { label: "corsfix", prefix: "https://proxy.corsfix.com/?" },
+  { label: "cors.lol", prefix: "https://api.cors.lol/?url={url}" },
+  { label: "isomorphic-git", prefix: "https://cors.isomorphic-git.org/" },
 ];
+
+/* ------------------------------------------------------------------- probing */
+
+export type ProbeResult = {
+  label: string;
+  prefix: string;
+  ok: boolean;
+  detail: string;
+  ms: number;
+};
+
+const RUN_PATH = "/api/sdk/run-conversation";
+
+/** Build the URL a given prefix would produce for the model endpoint. */
+export function targetFor(prefix: string): string {
+  const direct = TYPEAI_ORIGIN + RUN_PATH;
+  if (!prefix) return direct;
+  if (prefix.startsWith("/")) return prefix.replace(/\/$/, "") + RUN_PATH;
+  return prefix.includes("{url}")
+    ? prefix.replace("{url}", encodeURIComponent(direct))
+    : prefix + direct;
+}
+
+/**
+ * Ask each route the same real question and report what actually happened. This
+ * replaces guesswork: relays come and go, and only the user's own browser can say
+ * which ones work from where they are.
+ */
+export async function probeRoutes(
+  onProgress?: (done: number, total: number) => void,
+): Promise<ProbeResult[]> {
+  const routes: Relay[] = [{ label: "Direct (no relay)", prefix: "" }, ...RELAYS];
+  const results: ProbeResult[] = [];
+
+  for (let i = 0; i < routes.length; i++) {
+    const { label, prefix } = routes[i];
+    const started = performance.now();
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 12000);
+    try {
+      const res = await fetch(targetFor(prefix), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: "hello",
+          blockchain: "ethereum",
+          previousMessages: [],
+        }),
+        signal: controller.signal,
+      });
+      const text = await res.text();
+      let ok = res.ok;
+      let detail = `HTTP ${res.status}`;
+      if (ok) {
+        // A relay can return 200 while relaying an upstream error page.
+        try {
+          const body = JSON.parse(text);
+          ok = Boolean(body?.data);
+          detail = ok ? `HTTP ${res.status} · model replied` : `HTTP ${res.status} · unexpected body`;
+        } catch {
+          ok = false;
+          detail = `HTTP ${res.status} · non-JSON response`;
+        }
+      }
+      results.push({ label, prefix, ok, detail, ms: Math.round(performance.now() - started) });
+    } catch (err) {
+      const aborted = (err as Error)?.name === "AbortError";
+      results.push({
+        label,
+        prefix,
+        ok: false,
+        detail: aborted ? "timed out after 12s" : "blocked (CORS or unreachable)",
+        ms: Math.round(performance.now() - started),
+      });
+    } finally {
+      clearTimeout(timer);
+      onProgress?.(i + 1, routes.length);
+    }
+  }
+  return results;
+}
 
 export type PromptPayload = {
   message: string;
