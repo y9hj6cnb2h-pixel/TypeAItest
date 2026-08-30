@@ -92,6 +92,14 @@ export const IconWallet = ({ size = 15 }: IconProps) => (
   </svg>
 );
 
+export const IconMore = ({ size = 17 }: IconProps) => (
+  <svg {...svg(size)}>
+    <circle cx="5" cy="12" r="1.4" fill="currentColor" stroke="none" />
+    <circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none" />
+    <circle cx="19" cy="12" r="1.4" fill="currentColor" stroke="none" />
+  </svg>
+);
+
 export function Spinner() {
   return <span className="spin" aria-hidden />;
 }

@@ -4,20 +4,22 @@ import {
   connectEthereum,
   connectSolana,
   disconnectSolana,
-  hasMetaMask,
-  hasPhantom,
   shortAddress,
   type Chain,
   type WalletState,
 } from "./lib/wallet";
+import Scan from "./components/Scan";
 import Copilot from "./components/Copilot";
 import Portfolio from "./components/Portfolio";
 import TokenResearch from "./components/TokenResearch";
 import TxExplainer from "./components/TxExplainer";
 import Trade from "./components/Trade";
 import SettingsView from "./components/Settings";
+import { Logo, PoweredBy } from "./components/Brand";
 import {
+  IconBolt,
   IconGear,
+  IconMore,
   IconPie,
   IconReceipt,
   IconSearch,
@@ -27,23 +29,41 @@ import {
   Spinner,
 } from "./components/ui";
 
-type ViewId = "copilot" | "portfolio" | "tokens" | "tx" | "trade" | "settings";
+type ViewId =
+  | "scan"
+  | "copilot"
+  | "portfolio"
+  | "tokens"
+  | "tx"
+  | "trade"
+  | "settings"
+  | "more";
 
-const VIEWS: Array<{
+type View = {
   id: ViewId;
   label: string;
   title: string;
   sub: string;
   icon: React.ReactNode;
   group: string;
-}> = [
+};
+
+const VIEWS: View[] = [
+  {
+    id: "scan",
+    label: "Scan",
+    title: "Scan",
+    sub: "One tap, a full read on any wallet",
+    icon: <IconBolt />,
+    group: "Start",
+  },
   {
     id: "copilot",
-    label: "Copilot",
-    title: "Copilot",
+    label: "Ask",
+    title: "Ask",
     sub: "Natural language over live chain data",
     icon: <IconSpark />,
-    group: "Ask",
+    group: "Start",
   },
   {
     id: "portfolio",
@@ -87,8 +107,12 @@ const VIEWS: Array<{
   },
 ];
 
+// A phone can't carry seven tabs; the rest live behind "More".
+const MOBILE_TABS: ViewId[] = ["scan", "copilot", "portfolio", "tokens"];
+const MORE_VIEWS = VIEWS.filter((v) => !MOBILE_TABS.includes(v.id));
+
 export default function App() {
-  const [view, setView] = useState<ViewId>("copilot");
+  const [view, setView] = useState<ViewId>("scan");
   const [settings, setSettings] = useState<S>(() => loadSettings());
   const [chain, setChain] = useState<Chain>("ethereum");
   const [wallet, setWallet] = useState<WalletState | null>(null);
@@ -116,31 +140,28 @@ export default function App() {
     setWallet(null);
   }, [wallet]);
 
-  const current = VIEWS.find((v) => v.id === view)!;
+  const current =
+    VIEWS.find((v) => v.id === view) ??
+    ({
+      id: "more",
+      label: "More",
+      title: "More",
+      sub: "Everything else Sonari can do",
+      icon: <IconMore />,
+      group: "",
+    } as View);
+
   const groups = [...new Set(VIEWS.map((v) => v.group))];
-  const walletAvailable = chain === "ethereum" ? hasMetaMask() : hasPhantom();
+  const shared = { settings, wallet, chain, onChainChange: setChain };
 
   return (
     <div className="app">
-      <nav className="sidebar">
+      <nav className="sidebar" aria-label="Sections">
         <div className="brand">
-          <div className="brand-mark" aria-hidden>
-            <svg
-              width="17"
-              height="17"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.4"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M3 17 8 8l4 5.5L15 10l6 7" />
-            </svg>
-          </div>
+          <Logo size={30} />
           <div className="brand-text">
-            <div className="brand-name">Onchain Copilot</div>
-            <div className="brand-sub">TypeAI SDK</div>
+            <div className="brand-name">Sonari</div>
+            <div className="brand-sub">Onchain AI</div>
           </div>
         </div>
 
@@ -164,104 +185,129 @@ export default function App() {
         </div>
 
         <div className="sidebar-foot">
-          Powered by <code>type-ai-sdk</code>
-          <br />
-          <a
-            href="https://www.npmjs.com/package/type-ai-sdk"
-            target="_blank"
-            rel="noreferrer"
-          >
-            View on npm
-          </a>
+          <PoweredBy />
         </div>
       </nav>
 
       <main className="main">
         <header className="topbar">
-          <div>
-            <h1>{current.title}</h1>
-            <div className="sub">{current.sub}</div>
+          <div className="topbar-id">
+            <span className="topbar-logo">
+              <Logo size={26} />
+            </span>
+            <div className="topbar-text">
+              <h1>{current.title}</h1>
+              <div className="sub">{current.sub}</div>
+            </div>
           </div>
           <span className="spacer" />
 
-          {walletError && (
-            <span className="chip bad" title={walletError}>
-              <span className="dot" /> {walletError.slice(0, 44)}
-            </span>
-          )}
+          <span className="topbar-powered">
+            <PoweredBy compact />
+          </span>
 
           {wallet ? (
             <div className="wallet-pill">
               <span className="dot" style={{ color: "var(--mint)" }} />
-              <span className="addr">{shortAddress(wallet.address, 5)}</span>
-              <button className="btn sm ghost" onClick={() => void disconnect()}>
-                Disconnect
+              <span className="addr">{shortAddress(wallet.address, 4)}</span>
+              <button
+                className="btn sm ghost"
+                onClick={() => void disconnect()}
+                aria-label="Disconnect wallet"
+              >
+                Exit
               </button>
             </div>
           ) : (
             <button
-              className="btn"
+              className="btn sm connect-btn"
               onClick={() => void connect()}
               disabled={connecting}
-              title={
-                walletAvailable
-                  ? undefined
-                  : `No ${chain === "ethereum" ? "Ethereum" : "Solana"} wallet detected in this browser`
-              }
             >
               {connecting ? <Spinner /> : <IconWallet />}
-              {connecting
-                ? "Connecting…"
-                : `Connect ${chain === "ethereum" ? "MetaMask" : "Phantom"}`}
+              <span className="connect-label">
+                {connecting ? "Connecting…" : "Connect"}
+              </span>
             </button>
           )}
         </header>
 
+        {walletError && (
+          <div className="topbar-alert" role="alert">
+            {walletError}
+            <button
+              className="topbar-alert-x"
+              onClick={() => setWalletError(null)}
+              aria-label="Dismiss"
+            >
+              ×
+            </button>
+          </div>
+        )}
+
         <div className={`content${view === "copilot" ? " content-flush" : ""}`}>
-          {view === "copilot" && (
-            <Copilot
-              settings={settings}
-              wallet={wallet}
-              chain={chain}
-              onChainChange={setChain}
-            />
-          )}
-          {view === "portfolio" && (
-            <Portfolio
-              settings={settings}
-              wallet={wallet}
-              chain={chain}
-              onChainChange={setChain}
-            />
-          )}
-          {view === "tokens" && (
-            <TokenResearch
-              settings={settings}
-              wallet={wallet}
-              chain={chain}
-              onChainChange={setChain}
-            />
-          )}
+          {view === "scan" && <Scan {...shared} onConnect={() => void connect()} />}
+          {view === "copilot" && <Copilot {...shared} />}
+          {view === "portfolio" && <Portfolio {...shared} />}
+          {view === "tokens" && <TokenResearch {...shared} />}
           {view === "tx" && (
-            <TxExplainer
-              settings={settings}
-              chain={chain}
-              onChainChange={setChain}
-            />
+            <TxExplainer settings={settings} chain={chain} onChainChange={setChain} />
           )}
           {view === "trade" && (
-            <Trade
-              settings={settings}
-              wallet={wallet}
-              chain={chain}
-              onChainChange={setChain}
-              onConnect={() => void connect()}
-            />
+            <Trade {...shared} onConnect={() => void connect()} />
           )}
           {view === "settings" && (
             <SettingsView settings={settings} onChange={setSettings} />
           )}
+          {view === "more" && (
+            <div className="content-pad">
+              <ul className="more-list">
+                {MORE_VIEWS.map((v) => (
+                  <li key={v.id}>
+                    <button onClick={() => setView(v.id)}>
+                      <span className="more-icon">{v.icon}</span>
+                      <span className="more-text">
+                        <span className="more-label">{v.label}</span>
+                        <span className="more-sub">{v.sub}</span>
+                      </span>
+                      <span className="more-chev" aria-hidden>
+                        ›
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              <div style={{ marginTop: 22, textAlign: "center" }}>
+                <PoweredBy />
+              </div>
+            </div>
+          )}
         </div>
+
+        <nav className="tabbar" aria-label="Sections">
+          {MOBILE_TABS.map((id) => {
+            const v = VIEWS.find((x) => x.id === id)!;
+            return (
+              <button
+                key={id}
+                className="tab"
+                aria-current={view === id}
+                onClick={() => setView(id)}
+              >
+                {v.icon}
+                <span>{v.label}</span>
+              </button>
+            );
+          })}
+          <button
+            className="tab"
+            aria-current={view === "more" || MORE_VIEWS.some((v) => v.id === view)}
+            onClick={() => setView("more")}
+          >
+            <IconMore />
+            <span>More</span>
+          </button>
+        </nav>
       </main>
     </div>
   );

@@ -1,10 +1,15 @@
-# Onchain Copilot
+# Sonari
 
-An AI wallet analyst for Ethereum and Solana, built entirely on the
-[TypeAI SDK](https://www.npmjs.com/package/type-ai-sdk).
+**Ping any wallet. Read any chain.**
+
+An AI onchain analyst for Ethereum and Solana, built entirely on the
+[TypeAI SDK](https://www.npmjs.com/package/type-ai-sdk) — the mark is a sonar ping,
+because that is what the app does: you ping an address and it reads back what is there.
 
 Ask a question in plain English, watch the agent pick an on-chain tool and run it in
-your own browser, and sign any resulting transaction with your own wallet.
+your own browser, and sign any resulting transaction with your own wallet. Built
+mobile-first: a bottom tab bar, a pull-up agent trace, and no horizontal scroll at
+390px.
 
 **Live:** https://y9hj6cnb2h-pixel.github.io/TypeAItest/
 
@@ -29,7 +34,8 @@ Every panel is a direct call to one of the SDK's seven methods:
 
 | Panel | SDK call |
 | --- | --- |
-| **Copilot** — natural-language Q&A with a live agent trace | `prompt()` |
+| **Scan** — one tap fans out across several calls and folds them into one read on a wallet | `getTokenBalance()`, `getTransactionFee()`, `getTokenPortfolio()`, `prompt()` |
+| **Ask** — natural-language Q&A with a live agent trace | `prompt()` |
 | **Portfolio** — every token a wallet holds, priced, with an allocation donut | `getTokenPortfolio()` |
 | **Token research** — price, market cap, supply, contract | `getTokenDetails()`, `getTokenBalance()` |
 | **Transactions** — decode any hash into plain English; live fee data | `getTransactionSummary()`, `getTransactionFee()` |

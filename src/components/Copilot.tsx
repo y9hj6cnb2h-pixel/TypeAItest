@@ -10,7 +10,8 @@ import {
 } from "../lib/netlog";
 import AgentTrace from "./AgentTrace";
 import SignPanel, { extractTx } from "./SignPanel";
-import { ErrorBox, IconSend, Spinner } from "./ui";
+import { PoweredBy } from "./Brand";
+import { ErrorBox, IconBolt, IconSend, Spinner } from "./ui";
 
 type ChatMsg = {
   id: string;
@@ -81,6 +82,7 @@ export default function Copilot({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [traceKey, setTraceKey] = useState(0);
+  const [traceOpen, setTraceOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const taRef = useRef<HTMLTextAreaElement>(null);
 
@@ -215,7 +217,7 @@ export default function Copilot({
                 ref={taRef}
                 rows={1}
                 value={input}
-                placeholder={`Ask about wallets, tokens, gas or transactions on ${chain}…`}
+                placeholder={`Ask anything about ${chain}…`}
                 onChange={(e) => {
                   setInput(e.target.value);
                   const el = e.target;
@@ -252,20 +254,37 @@ export default function Copilot({
                 </button>
               </div>
               {wallet ? (
-                <span>
+                <span className="composer-hint">
                   Wallet context: <code>{shortAddress(wallet.address, 6)}</code>
                 </span>
               ) : (
-                <span>Connect a wallet to ask about “my” balances.</span>
+                <span className="composer-hint">
+                  Connect a wallet to ask about “my” balances.
+                </span>
               )}
               <span className="spacer" />
-              <span>Enter to send · Shift+Enter for a new line</span>
+              <button
+                className="trace-toggle btn sm ghost"
+                onClick={() => setTraceOpen(true)}
+              >
+                <IconBolt /> Agent trace
+              </button>
+              <span className="composer-hint">
+                Enter to send · Shift+Enter for a new line
+              </span>
             </div>
           </div>
         </div>
       </div>
 
-      <AgentTrace resetKey={traceKey} />
+      {traceOpen && (
+        <div className="trace-backdrop" onClick={() => setTraceOpen(false)} />
+      )}
+      <AgentTrace
+        resetKey={traceKey}
+        open={traceOpen}
+        onClose={() => setTraceOpen(false)}
+      />
     </div>
   );
 }
@@ -279,22 +298,17 @@ function Intro({
 }) {
   return (
     <div>
+      <div style={{ marginBottom: 12 }}>
+        <PoweredBy />
+      </div>
       <h2 style={{ fontSize: 21, margin: "6px 0 6px", letterSpacing: "-0.02em" }}>
         Ask the chain anything.
       </h2>
       <p className="dim" style={{ margin: "0 0 4px", maxWidth: 620 }}>
-        This copilot runs on the{" "}
-        <a
-          href="https://www.npmjs.com/package/type-ai-sdk"
-          target="_blank"
-          rel="noreferrer"
-        >
-          TypeAI SDK
-        </a>
-        . A hosted model reads your question and picks an on-chain tool; the SDK then
-        executes that tool right here in your browser and writes the answer back in
-        plain English. Watch the <strong>Agent trace</strong> on the right to see each
-        step as it happens.
+        Sonari runs on the TypeAI SDK. A hosted model reads your question and picks
+        an on-chain tool; the SDK then executes that tool right here in your browser
+        and writes the answer back in plain English. Open the{" "}
+        <strong>Agent trace</strong> to watch every step as it happens.
       </p>
       <div className="suggestions">
         {SUGGESTIONS[chain].map((s) => (

@@ -1,9 +1,9 @@
 {
-  "name": "onchain-copilot",
+  "name": "sonari",
   "private": true,
   "version": "1.0.0",
   "type": "module",
-  "description": "An AI wallet analyst for Ethereum and Solana, built on the TypeAI SDK.",
+  "description": "Sonari — ping any wallet, read any chain. An AI onchain analyst built on the TypeAI SDK.",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",

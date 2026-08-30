@@ -17,7 +17,15 @@ type Row =
  * outbound call the SDK made to execute it. Rendered from the network tap, since the
  * SDK's return value alone doesn't expose the agent loop.
  */
-export default function AgentTrace({ resetKey }: { resetKey: number }) {
+export default function AgentTrace({
+  resetKey,
+  open = false,
+  onClose,
+}: {
+  resetKey: number;
+  open?: boolean;
+  onClose?: () => void;
+}) {
   const [steps, setSteps] = useState<AgentStep[]>([]);
   const [nets, setNets] = useState<NetEvent[]>([]);
   const bodyRef = useRef<HTMLDivElement>(null);
@@ -55,7 +63,7 @@ export default function AgentTrace({ resetKey }: { resetKey: number }) {
   ].sort((a, b) => a.at - b.at);
 
   return (
-    <aside className="trace">
+    <aside className={`trace${open ? " open" : ""}`}>
       <div className="trace-head">
         <span style={{ color: "var(--mint)", display: "grid" }}>
           <IconBolt />
@@ -65,6 +73,9 @@ export default function AgentTrace({ resetKey }: { resetKey: number }) {
         <span className="chip">
           {steps.length} tool call{steps.length === 1 ? "" : "s"}
         </span>
+        <button className="trace-close btn sm ghost" onClick={onClose}>
+          Close
+        </button>
       </div>
       <div className="trace-body" ref={bodyRef}>
         <p className="trace-note">
