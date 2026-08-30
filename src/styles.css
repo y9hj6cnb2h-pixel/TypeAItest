@@ -1433,3 +1433,17 @@ select {
   font-size: 10px;
   vertical-align: middle;
 }
+
+.error-detail {
+  margin-top: 9px;
+  font-size: 11.5px;
+  opacity: 0.85;
+}
+.error-detail summary {
+  cursor: pointer;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+.error-box .suggestions {
+  margin-top: 12px;
+}

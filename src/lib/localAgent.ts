@@ -82,6 +82,31 @@ export async function answerLocally(
     return call();
   };
 
+  // 0. Greetings and "what can you do" deserve an answer, not a network post-mortem.
+  if (
+    /^\s*(hi|hey+|hello|yo|hola|hei|halla|heisann|sup|good (morning|afternoon|evening))\b/i.test(
+      message,
+    ) ||
+    /what can you do|who are you|what are you|\bhelp\b|how does this work|what is this/i.test(q) ||
+    message.trim().length <= 3
+  ) {
+    return {
+      text:
+        "I'm Sonari — I read Ethereum and Solana through the TypeAI SDK.\n\n" +
+        "Right now the hosted TypeAI model can't be reached from this site, so I'm " +
+        "routing questions myself. I can still answer:\n\n" +
+        "• Network fees — “what is the gas fee on Ethereum?”\n" +
+        "• A wallet's balance — “ETH balance of 0xd8dA…96045”\n" +
+        "• A whole portfolio — “portfolio of 0xd8dA…96045” (needs a Covalent key)\n" +
+        "• Token details — “tell me about USDC” (needs a DEXTools key)\n" +
+        "• Any transaction — paste its hash and I'll explain it\n\n" +
+        "Swaps and transfers live on the Swap & send screen, where you can review " +
+        "the payload before your wallet signs.",
+      tool: "capabilities",
+      args: {},
+    };
+  }
+
   // 1. Explain a transaction — a hash in the text is an unambiguous signal.
   const hash = findTxHash(message, chain);
   if (hash) {

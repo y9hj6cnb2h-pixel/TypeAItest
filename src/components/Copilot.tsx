@@ -24,6 +24,9 @@ type ChatMsg = {
   local?: boolean;
 };
 
+/** Short, actionable headline first; the network post-mortem tucked behind a toggle. */
+type ChatError = { summary: string; detail?: string };
+
 type Suggestion = { label: string; query: string };
 
 const SUGGESTIONS: Record<Chain, Suggestion[]> = {
@@ -83,7 +86,7 @@ export default function Copilot({
   const [history, setHistory] = useState<ITypeAiClientMessage[]>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<ChatError | null>(null);
   const [traceKey, setTraceKey] = useState(0);
   const [traceOpen, setTraceOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -141,7 +144,7 @@ export default function Copilot({
       }
 
       if (!responses?.length) {
-        setError("The agent returned no response. Try rephrasing the question.");
+        setError({ summary: "The agent returned no response. Try rephrasing the question." });
       }
 
       // prompt() catches everything internally and returns this as a normal reply
@@ -180,16 +183,21 @@ export default function Copilot({
             return;
           }
         } catch (fallbackErr) {
-          setError(`${reason} Offline fallback also failed: ${describeError(fallbackErr)}`);
+          setError({
+            summary: `That request failed: ${describeError(fallbackErr)}`,
+            detail: reason,
+          });
           setBusy(false);
           return;
         }
 
-        setError(
-          `${reason} I also tried answering it here without the hosted model, but ` +
-            `couldn't tell which on-chain tool you wanted. Try naming one directly — ` +
-            `gas fees, a token's price, a wallet balance, or a transaction hash.`,
-        );
+        setError({
+          summary:
+            "I couldn't tell which on-chain tool that needs. Try one of the " +
+            "suggestions below, or name it directly — gas fees, a token's price, a " +
+            "wallet balance, or paste a transaction hash.",
+          detail: reason,
+        });
         setBusy(false);
         return;
       }
@@ -205,7 +213,7 @@ export default function Copilot({
         })),
       ]);
     } catch (err) {
-      setError(describeError(err));
+      setError({ summary: describeError(err) });
     } finally {
       setBusy(false);
     }
@@ -245,7 +253,29 @@ export default function Copilot({
               </div>
             )}
 
-            {error && <ErrorBox>{error}</ErrorBox>}
+            {error && (
+              <ErrorBox>
+                {error.summary}
+                {error.detail && (
+                  <details className="error-detail">
+                    <summary>Why the hosted model didn't answer</summary>
+                    {error.detail}
+                  </details>
+                )}
+                <div className="suggestions">
+                  {SUGGESTIONS[chain].map((s) => (
+                    <button
+                      key={s.label}
+                      className="suggestion"
+                      onClick={() => void ask(s.query)}
+                      title={s.query}
+                    >
+                      {s.label}
+                    </button>
+                  ))}
+                </div>
+              </ErrorBox>
+            )}
           </div>
         </div>
 
