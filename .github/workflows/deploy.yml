@@ -2,7 +2,7 @@ name: Deploy to GitHub Pages
 
 on:
   push:
-    branches: [claude/web3-typeai-sdk-app-x2y0yf]
+    branches: [main]
   workflow_dispatch:
 
 # Allow the workflow to publish to Pages.
@@ -35,7 +35,11 @@ jobs:
       - name: Build
         run: npm run build
 
+      # `enablement` turns Pages on (with GitHub Actions as the source) the first
+      # time this runs, so the repository needs no manual Settings change.
       - uses: actions/configure-pages@v5
+        with:
+          enablement: true
 
       - uses: actions/upload-pages-artifact@v3
         with:

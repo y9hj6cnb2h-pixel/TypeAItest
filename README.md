@@ -95,9 +95,10 @@ that origin through a CORS proxy you run yourself.
 
 ## Deployment
 
-Pushing to `claude/web3-typeai-sdk-app-x2y0yf` triggers `.github/workflows/deploy.yml`,
-which typechecks, builds, and publishes `dist/` to GitHub Pages. Pages must be set to
-**Build and deployment → Source → GitHub Actions** in the repository settings.
+Pushing to `main` triggers `.github/workflows/deploy.yml`, which typechecks, builds,
+and publishes `dist/` to GitHub Pages. The workflow passes `enablement: true` to
+`actions/configure-pages`, so it turns Pages on with GitHub Actions as the source on
+its first run — no manual repository setting required.
 
 The Vite `base` is `/TypeAItest/`, matching the repository name. Change it in
 `vite.config.ts` if you rename or fork the repo.
