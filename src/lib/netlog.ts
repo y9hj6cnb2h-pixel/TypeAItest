@@ -50,11 +50,75 @@ export const onAgentStep = (fn: Listener<AgentStep>) => {
   return () => stepListeners.delete(fn);
 };
 
-const emitNet = (e: NetEvent) => netListeners.forEach((fn) => fn(e));
+const emitNet = (e: NetEvent) => {
+  // Remember the agent call so a generic SDK failure can be explained. Record the
+  // start event too: axios can reject before our XHR listener fires, so "started but
+  // never completed" is itself the signal that the browser dropped the response.
+  if (e.label === "TypeAI Agent") lastTypeAiCall = e;
+  netListeners.forEach((fn) => fn(e));
+};
 const emitStep = (s: AgentStep) => stepListeners.forEach((fn) => fn(s));
 
 let seq = 0;
 const nextId = () => `${Date.now().toString(36)}-${(seq++).toString(36)}`;
+
+/* ------------------------------------------------------------------ diagnosis */
+
+/**
+ * `prompt()` catches every failure in the conversation flow and returns this string
+ * as an ordinary assistant message rather than throwing, so the app has to recognise
+ * it by value to know anything went wrong.
+ */
+export const SDK_GENERIC_FAILURE =
+  "An error occurred while processing your request";
+
+/** Last completed call to the TypeAI origin, and the SDK's own logged error. */
+let lastTypeAiCall: NetEvent | null = null;
+let lastSdkError: string | null = null;
+
+export const resetDiagnosis = () => {
+  lastTypeAiCall = null;
+  lastSdkError = null;
+};
+
+/**
+ * Explain a generic SDK failure using what the tap actually observed. The SDK hides
+ * the cause; the network layer and the SDK's own logger still know it.
+ */
+export function diagnoseAgentFailure(): string {
+  const parts: string[] = [];
+  const call = lastTypeAiCall;
+
+  if (!call) {
+    parts.push(
+      `No request to ${TYPEAI_ORIGIN} was recorded, so the SDK failed before it ` +
+        `reached the network — usually a malformed request or an internal error.`,
+    );
+  } else if (call.ms === undefined || call.error || call.status === 0) {
+    parts.push(
+      `The browser could not complete the request to ${TYPEAI_ORIGIN} ` +
+        `(${call.error ?? "network error"}). This is almost always CORS: the API ` +
+        `did not return an Access-Control-Allow-Origin header for this site, so the ` +
+        `browser blocked the response before the SDK could read it. Retrying will ` +
+        `not help — set a proxy under Settings → Connectivity, or run the app from ` +
+        `an origin the API allows.`,
+    );
+  } else if (call.status && call.status >= 400) {
+    parts.push(
+      `${TYPEAI_ORIGIN} answered HTTP ${call.status}. That is a server-side ` +
+        `rejection, not a browser problem.`,
+    );
+  } else {
+    parts.push(
+      `The call to ${TYPEAI_ORIGIN} returned HTTP ${call.status}, so the model ` +
+        `replied but a later step failed — most often a tool the agent chose needs ` +
+        `a provider key you haven't set, or your RPC endpoint rejected the request.`,
+    );
+  }
+
+  if (lastSdkError) parts.push(`SDK reported: ${lastSdkError}`);
+  return parts.join(" ");
+}
 
 /* ------------------------------------------------------------------ redaction */
 
@@ -213,6 +277,42 @@ let installed = false;
 export function installNetworkTap() {
   if (installed) return;
   installed = true;
+
+  /* ---- capture the SDK's own error log ---- */
+  // The SDK logs the real cause via logger.error() and then returns a generic
+  // message, so this is the only place the underlying error is available.
+  const origConsoleError = console.error.bind(console);
+  console.error = (...args: unknown[]) => {
+    try {
+      const head = String(args[0] ?? "");
+      if (head.includes("[TypeAI SDK]") || head.includes("running conversation")) {
+        lastSdkError = args
+          .slice(1)
+          .map((a) =>
+            a instanceof Error
+              ? a.message
+              : typeof a === "object" && a !== null
+                ? (() => {
+                    try {
+                      return JSON.stringify(a).slice(0, 300);
+                    } catch {
+                      return String(a);
+                    }
+                  })()
+                : String(a),
+          )
+          .filter(Boolean)
+          .join(" ")
+          // The logger prefixes ANSI colour codes, which are noise in a browser.
+          .replace(/\[[0-9;]*m/g, "")
+          .trim()
+          .slice(0, 400);
+      }
+    } catch {
+      /* never let diagnostics break logging */
+    }
+    origConsoleError(...args);
+  };
 
   /* ---- fetch ---- */
   const origFetch = globalThis.fetch?.bind(globalThis);

@@ -12,10 +12,12 @@ export function getClient(settings: Settings): TypeAiClient {
   const key = JSON.stringify(cfg);
   if (cached?.key === key) return cached.client;
   const client = new TypeAiClient(cfg);
-  // `?debug=1` turns on the SDK's own logger, which is the only way to see why an
-  // internal step failed — the SDK swallows errors and returns a generic message.
-  if (typeof location !== "undefined" && /(^|[?&])debug=1(&|$)/.test(location.search))
-    client.setLogging(true, 3);
+  // The SDK swallows internal errors and returns a generic message, logging the real
+  // cause through its own logger. Keep that logger on at ERROR level so the network
+  // tap can capture the cause and explain the failure; `?debug=1` turns it up to DEBUG.
+  const verbose =
+    typeof location !== "undefined" && /(^|[?&])debug=1(&|$)/.test(location.search);
+  client.setLogging(true, verbose ? 3 : 0);
   cached = { key, client };
   return client;
 }

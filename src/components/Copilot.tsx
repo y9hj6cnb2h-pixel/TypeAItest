@@ -3,6 +3,11 @@ import type { ITypeAiClientMessage, IResponseConstructorOutput } from "type-ai-s
 import { getClient, describeError, readMessage } from "../lib/client";
 import type { Settings } from "../lib/config";
 import { shortAddress, type Chain, type WalletState } from "../lib/wallet";
+import {
+  diagnoseAgentFailure,
+  resetDiagnosis,
+  SDK_GENERIC_FAILURE,
+} from "../lib/netlog";
 import AgentTrace from "./AgentTrace";
 import SignPanel, { extractTx } from "./SignPanel";
 import { ErrorBox, IconSend, Spinner } from "./ui";
@@ -98,6 +103,7 @@ export default function Copilot({
     setInput("");
     setError(null);
     setTraceKey((k) => k + 1);
+    resetDiagnosis();
     setMessages((m) => [
       ...m,
       { id: crypto.randomUUID(), role: "user", text, chain },
@@ -131,6 +137,20 @@ export default function Copilot({
 
       if (!responses?.length) {
         setError("The agent returned no response. Try rephrasing the question.");
+      }
+
+      // prompt() catches everything internally and returns this as a normal reply
+      // rather than throwing, so recognise it and surface the real cause.
+      const swallowed = (responses ?? []).some((r) =>
+        readMessage(r.message).text.includes(SDK_GENERIC_FAILURE),
+      );
+      if (swallowed) {
+        // The failing request's outcome can land a tick after prompt() rejects, so
+        // yield once before reading it — otherwise we diagnose from a half-filled tap.
+        await new Promise((r) => setTimeout(r, 60));
+        setError(diagnoseAgentFailure());
+        setBusy(false);
+        return;
       }
 
       setMessages((m) => [
