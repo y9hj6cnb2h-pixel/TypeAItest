@@ -96,9 +96,15 @@ that origin through a CORS proxy you run yourself.
 ## Deployment
 
 Pushing to `main` triggers `.github/workflows/deploy.yml`, which typechecks, builds,
-and publishes `dist/` to GitHub Pages. The workflow passes `enablement: true` to
-`actions/configure-pages`, so it turns Pages on with GitHub Actions as the source on
-its first run — no manual repository setting required.
+and publishes `dist/` to GitHub Pages.
+
+**One-time setup.** Before the first deploy can succeed, enable Pages on the
+repository: **Settings → Pages → Build and deployment → Source → GitHub Actions**.
+The workflow cannot do this for itself — creating a Pages site requires
+`administration:write`, which a workflow's `GITHUB_TOKEN` cannot be granted, so
+`actions/configure-pages` fails with *"Resource not accessible by integration"* until
+the setting exists. After that one click, every push to `main` deploys automatically;
+you can also re-run the workflow by hand from the Actions tab (`workflow_dispatch`).
 
 The Vite `base` is `/TypeAItest/`, matching the repository name. Change it in
 `vite.config.ts` if you rename or fork the repo.
