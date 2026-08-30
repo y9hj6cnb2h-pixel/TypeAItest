@@ -30,6 +30,18 @@ export default defineConfig({
       process.env.NODE_ENV ?? "production",
     ),
   },
+  // `npm run dev` reaches the TypeAI model for real: the browser calls this origin
+  // at /typeai, Vite forwards it server-side, and CORS never enters the picture.
+  server: {
+    proxy: {
+      "/typeai": {
+        target: "https://api.typeai.live",
+        changeOrigin: true,
+        secure: true,
+        rewrite: (path: string) => path.replace(/^\/typeai/, ""),
+      },
+    },
+  },
   optimizeDeps: {
     include: ["type-ai-sdk", "buffer"],
   },

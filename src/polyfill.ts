@@ -2,21 +2,26 @@
 // to be installed by a module that is *evaluated* before anything touching the SDK.
 import { Buffer } from "buffer";
 
-const g = globalThis as unknown as Record<string, unknown>;
+const g = globalThis as unknown as Record<string, any>;
 
 if (!g.global) g.global = globalThis;
 if (!g.Buffer) g.Buffer = Buffer;
-if (!g.process) {
-  g.process = {
-    env: {} as Record<string, string>,
-    version: "",
-    versions: { node: "" },
-    platform: "browser",
-    browser: true,
-    nextTick: (fn: () => void, ...args: unknown[]) =>
-      queueMicrotask(() => (fn as (...a: unknown[]) => void)(...args)),
-    cwd: () => "/",
-  };
-}
+
+// Merge rather than replace. Vite's dev server can leave a partial `process` in place
+// (from its `define` handling), and an all-or-nothing guard then skips the pieces the
+// SDK's bundled dotenv actually calls — `process.cwd()` being the one that crashed.
+const proc = (g.process ??= {});
+proc.env ??= {};
+proc.version ??= "";
+proc.versions ??= { node: "" };
+proc.platform ??= "browser";
+proc.browser ??= true;
+proc.argv ??= [];
+if (typeof proc.cwd !== "function") proc.cwd = () => "/";
+if (typeof proc.nextTick !== "function")
+  proc.nextTick = (fn: (...a: unknown[]) => void, ...args: unknown[]) =>
+    queueMicrotask(() => fn(...args));
+if (typeof proc.on !== "function") proc.on = () => proc;
+if (typeof proc.emit !== "function") proc.emit = () => false;
 
 export {};

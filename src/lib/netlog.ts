@@ -12,6 +12,21 @@
  */
 
 export const TYPEAI_ORIGIN = "https://api.typeai.live";
+
+/**
+ * The SDK hardcodes a second endpoint for development:
+ *   NODE_ENV === "development" ? "http://localhost:8080/api/sdk" : "https://api.typeai.live/api/sdk"
+ * Vite sets NODE_ENV=development for `npm run dev`, so without this the SDK quietly
+ * posts to a local backend nobody is running. Treat both origins as TypeAI.
+ */
+export const TYPEAI_DEV_ORIGIN = "http://localhost:8080";
+
+const typeAiOriginOf = (url: string) =>
+  url.startsWith(TYPEAI_ORIGIN)
+    ? TYPEAI_ORIGIN
+    : url.startsWith(TYPEAI_DEV_ORIGIN)
+      ? TYPEAI_DEV_ORIGIN
+      : null;
 const PROXY_KEY = "onchain-copilot:proxy";
 
 export type NetEvent = {
@@ -160,7 +175,7 @@ function classify(rawUrl: string): { label: string; detail?: string } {
     return { label: "request" };
   }
 
-  if (host.endsWith("typeai.live")) {
+  if (host.endsWith("typeai.live") || rawUrl.startsWith(TYPEAI_DEV_ORIGIN)) {
     if (path.includes("run-conversation"))
       return { label: "TypeAI Agent", detail: "plan · choose tool" };
     if (path.includes("refine-conversation"))
@@ -207,12 +222,21 @@ function isInteresting(rawUrl: string): boolean {
 
 /* ------------------------------------------------------- optional CORS proxy */
 
+/**
+ * In `npm run dev`, Vite proxies /typeai -> https://api.typeai.live (see
+ * vite.config.ts). The browser then makes a same-origin request, so CORS never
+ * applies and the hosted model is reachable for real with no proxy to deploy.
+ */
+export const DEV_PROXY_PREFIX = "/typeai";
+
 export function getProxyPrefix(): string {
   try {
-    return localStorage.getItem(PROXY_KEY) ?? "";
+    const stored = localStorage.getItem(PROXY_KEY);
+    if (stored !== null) return stored;
   } catch {
-    return "";
+    /* fall through to the dev default */
   }
+  return import.meta.env.DEV ? DEV_PROXY_PREFIX : "";
 }
 export function setProxyPrefix(v: string) {
   try {
@@ -223,14 +247,24 @@ export function setProxyPrefix(v: string) {
   }
 }
 
-/** Rewrite only the TypeAI origin, and only when the user has configured a proxy. */
+/** Rewrite only the TypeAI origin, and only when a proxy is configured. */
 function applyProxy(rawUrl: string): string {
   const prefix = getProxyPrefix();
   if (!prefix) return rawUrl;
-  if (!rawUrl.startsWith(TYPEAI_ORIGIN)) return rawUrl;
+  const origin = typeAiOriginOf(rawUrl);
+  if (!origin) return rawUrl;
+
+  const path = rawUrl.slice(origin.length);
+
+  // A prefix starting with "/" is a same-origin path (the Vite dev proxy): swap the
+  // origin for it and keep the path, rather than appending the whole URL.
+  if (prefix.startsWith("/")) return prefix.replace(/\/$/, "") + path;
+
+  // For an absolute proxy, always forward the public origin — never the dev one.
+  const target = TYPEAI_ORIGIN + path;
   return prefix.includes("{url}")
-    ? prefix.replace("{url}", encodeURIComponent(rawUrl))
-    : prefix + rawUrl;
+    ? prefix.replace("{url}", encodeURIComponent(target))
+    : prefix + target;
 }
 
 /* ---------------------------------------------------------- agent-step parsing */

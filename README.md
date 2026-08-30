@@ -58,6 +58,9 @@ npm run preview   # serve that build
 Add `?debug=1` to the URL to turn on the SDK's own logger — useful because the SDK
 swallows internal errors and returns generic messages.
 
+In dev, Ask reaches the **real** hosted model through Vite's proxy (see below), so this
+is the way to exercise `prompt()` end to end without deploying anything.
+
 ## Configuration
 
 **No API keys are required.** Every panel works on free public endpoints that need no
@@ -108,7 +111,33 @@ JSON-stringifies every `message` field before returning it, so prose answers arr
 wrapped in quotes and structured answers arrive as JSON strings. `readMessage()` in
 `src/lib/client.ts` decodes both.
 
-### The `api.typeai.live` CORS wall
+### Talking to the real TypeAI model
+
+CORS is a rule *browsers* enforce. Two ways to reach the hosted model for real, both
+free and needing no account:
+
+**1. `npm run dev`** — Vite proxies `/typeai` to `https://api.typeai.live` server-side
+(`vite.config.ts`). The browser makes a same-origin request, so CORS never applies and
+Ask talks to the real model with no proxy to deploy. This is on by default in dev.
+
+**2. `node scripts/ask.mjs`** — Node enforces no CORS at all, so the SDK reaches the
+API directly. The purest end-to-end test of `prompt()`:
+
+```bash
+node scripts/ask.mjs "what is the current gas fee on ethereum?"
+node scripts/ask.mjs --chain solana --debug "SOL balance of 9WzD...AWWM?"
+```
+
+`--debug` turns on the SDK's logger, which is the only place the real cause of a
+failure appears.
+
+> **A trap worth knowing.** The SDK hardcodes a second endpoint for development:
+> `NODE_ENV === "development" ? "http://localhost:8080/api/sdk" : "https://api.typeai.live/api/sdk"`.
+> Vite sets `NODE_ENV=development`, so in dev the SDK silently posts to a local backend
+> nobody is running. `src/lib/netlog.ts` treats both origins as TypeAI and routes them
+> through the proxy, which is what makes `npm run dev` work against the real API.
+
+### The `api.typeai.live` CORS wall (deployed site)
 
 The hosted model endpoint does not send an `Access-Control-Allow-Origin` header, so a
 browser refuses to hand its response to the page and the SDK reports a bare
