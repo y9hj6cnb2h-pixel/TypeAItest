@@ -200,3 +200,46 @@ The Vite `base` is `/TypeAItest/`, matching the repository name. Change it in
 The swap and send panels build **real mainnet transactions**. The SDK never sees a
 private key — it returns an unsigned payload and your wallet does the signing — but
 anything you approve is real and irreversible. Start with a tiny amount.
+
+## Tetris AI (`scripts/tetris-ai.mjs`)
+
+A self-contained Tetris engine plus a heuristic AI that plays it — no browser,
+no network, it plays its own board and prints the result.
+
+```bash
+npm run tetris                              # play until 115,000 points
+node scripts/tetris-ai.mjs --seed 42        # reproducible run
+node scripts/tetris-ai.mjs --render --delay 40
+node scripts/tetris-ai.mjs --target 5000000 --max-pieces 30000
+```
+
+Flags: `--target` (score to stop at, default 115000), `--seed`, `--max-pieces`,
+`--lookahead 0|1` (default 1), `--render`, `--delay <ms>`.
+
+### How it plays
+
+Each turn the AI enumerates every reachable hard-drop placement of the current
+piece — every rotation at every column, ~34 of them — simulates the resulting
+board, and scores it with Dellacherie's six features:
+
+| Feature | Meaning | Weight |
+| --- | --- | --- |
+| Landing height | how high the piece comes to rest | −4.50 |
+| Eroded piece cells | lines cleared × the piece's own cells in them | +3.42 |
+| Row transitions | filled/empty flips scanning each row (walls count as filled) | −3.22 |
+| Column transitions | the same down each column | −9.35 |
+| Holes | empty cells with something above them | −7.90 |
+| Cumulative wells | well depths summed quadratically | −3.39 |
+
+With `--lookahead 1` each candidate is also scored by the best follow-up
+placement of the *next* piece, which costs ~34× the work per move and buys a
+large jump in survival time.
+
+Scoring is guideline: 100/300/500/800 per 1–4 lines × level, plus 2 points per
+cell hard-dropped, with the level rising every 10 lines and never capping — so
+points accelerate as a run goes on. 115,000 lands around 130 lines / 330
+pieces; the AI comfortably runs past 20,000 pieces without topping out.
+
+Note the tetris count stays at 0: the well penalty makes this weight set keep
+the stack flat and clear singles rather than dig a column for the I-piece. Tuning
+`cumulativeWells` down is the obvious first experiment.

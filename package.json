@@ -3,12 +3,13 @@
   "private": true,
   "version": "1.0.0",
   "type": "module",
-  "description": "Sonari — ping any wallet, read any chain. An AI onchain analyst built on the TypeAI SDK.",
+  "description": "Sonari \u2014 ping any wallet, read any chain. An AI onchain analyst built on the TypeAI SDK.",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "typecheck": "tsc -b --noEmit false --emitDeclarationOnly false"
+    "typecheck": "tsc -b --noEmit false --emitDeclarationOnly false",
+    "tetris": "node scripts/tetris-ai.mjs"
   },
   "dependencies": {
     "buffer": "^6.0.3",
